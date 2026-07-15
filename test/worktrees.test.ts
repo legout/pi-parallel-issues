@@ -87,7 +87,7 @@ test("repository keys sanitize pathological repository names", () => {
   const manifest = prepareRun({ repo, baseline, run: "safe", issues: ["5"], paths });
   assert.match(manifest.repoKey, /^repo-1-[a-f0-9]{10}$/);
   const item = manifest.issues["5"]!;
-  assert.match(item.implementerAgent, /^parallel-repo-1-[a-f0-9]{10}-safe-issue-5-implementer$/);
+  assert.match(item.implementerAgent, /^p-repo-1-[a-f0-9]{10}-safe-issue-5-implementer$/);
   cleanupRun({ repo, run: "safe", paths });
 });
 

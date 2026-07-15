@@ -125,7 +125,7 @@ export function prepareRun(input: {
       const createdItem = { worktree, branch, agentFiles: [] as string[] };
       created.push(createdItem);
 
-      const prefix = `parallel-${key}-${run}-issue-${issue}`;
+      const prefix = `p-${key}-${run}-issue-${issue}`;
       const implementerAgent = `${prefix}-implementer`;
       const reviewerAgent = `${prefix}-reviewer`;
       const agentFiles = [

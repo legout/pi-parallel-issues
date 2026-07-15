@@ -12,6 +12,7 @@ import {
   resolveGitHubRepository,
 } from "../src/issue-graph.ts";
 import { removeManagedAgents, syncStaticAgents, type SyncAgentsResult } from "../src/managed-agents.ts";
+import { selectModel } from "../src/model-selector.ts";
 import { cleanupRun, prepareRun, runStatus } from "../src/worktrees.ts";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -24,11 +25,6 @@ function modelRefs(ctx: ExtensionContext): string[] {
   const refs = [...new Set(ctx.modelRegistry.getAvailable().map((model) => `${model.provider}/${model.id}`))];
   refs.sort((a, b) => a.localeCompare(b));
   return current ? [current, ...refs.filter((ref) => ref !== current)] : refs;
-}
-
-async function selectModel(ctx: ExtensionContext, title: string, choices: string[]): Promise<string | null> {
-  if (!ctx.hasUI) return null;
-  return (await ctx.ui.select(title, choices)) ?? null;
 }
 
 function skillBody(): string {

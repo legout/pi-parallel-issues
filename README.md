@@ -125,8 +125,11 @@ Default locations:
 $PI_CODING_AGENT_DIR/pi-parallel-issues.json
 ~/.pi/parallel-runs/<repo-key>/<run-id>/manifest.json
 ~/.pi/worktrees/<repo-key>/<run-id>/issue-<N>
-$PI_CODING_AGENT_DIR/agents/parallel-*.md
+$PI_CODING_AGENT_DIR/agents/p-*.md
 ```
+
+Generated per-issue implementer and reviewer agent identifiers begin with `p-` to keep active-agent
+names compact.
 
 Safety properties:
 

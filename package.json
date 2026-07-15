@@ -50,5 +50,8 @@
     "LICENSE",
     "README.md",
     "THIRD_PARTY_NOTICES.md"
-  ]
+  ],
+  "dependencies": {
+    "@earendil-works/pi-tui": "^0.80.7"
+  }
 }
