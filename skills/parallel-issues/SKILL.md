@@ -28,8 +28,9 @@ The command also injects an **execution routing** block. It names the exact stat
 
 Never ask an LLM to reconstruct dependency facts already present in the injected graph. GitHub state, labels, assignees, native `blocked_by` edges, frontier, topological waves, and deterministic deferrals are authoritative programmatic evidence.
 
-- If a graph is present and `requiresSemanticPlanner` is `false`, do **not** launch the planner. Use `frontier` as the eligible set, graph nodes as issue briefs, and graph deferrals verbatim.
-- If a graph is present and `requiresSemanticPlanner` is `true`, launch one synchronous `issue-planner` with the configured planner `model` and `thinking`. Give it the graph and ask it to resolve **only** `semanticUncertainties`: specification sufficiency and likely code/file overlap. It must not refetch or reinterpret deterministic dependency facts.
+- If a graph is present and `requested` contains exactly one issue, do **not** launch the planner, even when `requiresSemanticPlanner` is `true`. There is no concurrent-overlap decision to make. If it is eligible, use that graph node's body and acceptance criteria as the implementation brief; pass any `semanticUncertainties` to the implementer as risks rather than paying for a separate planning step. If it is not eligible, report its deterministic deferral or stop condition.
+- Otherwise, if a graph is present and `requiresSemanticPlanner` is `false`, do **not** launch the planner. Use `frontier` as the eligible set, graph nodes as issue briefs, and graph deferrals verbatim.
+- Otherwise, if a graph is present and `requiresSemanticPlanner` is `true`, launch one synchronous `issue-planner` with the configured planner `model` and `thinking`. Give it the graph and ask it to resolve **only** `semanticUncertainties`: specification sufficiency and likely code/file overlap. It must not refetch or reinterpret deterministic dependency facts.
 - If no graph is present because the selection was free-form, launch the planner with its configured `model` and `thinking` to resolve the selection and semantic readiness. It may use `parallel_issue_graph` after resolving exact issue numbers.
 
 When a planner is needed, require complete eligible issue briefs, acceptance criteria, semantic overlap risks, and any additional deferrals. Preserve deterministic deferrals even if the planner disagrees.
