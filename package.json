@@ -1,0 +1,53 @@
+{
+  "name": "pi-parallel-issues",
+  "version": "0.1.0",
+  "description": "Parallel GitHub issue implementation for Pi with persistent worktrees, independent review, and deterministic integration.",
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "subagents",
+    "worktrees",
+    "github-issues"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/legout/pi-parallel-issues.git"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "node --test test/*.test.ts",
+    "verify": "npm run check && npm test"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions/index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.80.7",
+    "@types/node": "^24.10.0",
+    "typebox": "^1.0.0",
+    "typescript": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "agents/",
+    "extensions/",
+    "skills/",
+    "src/",
+    "LICENSE",
+    "README.md",
+    "THIRD_PARTY_NOTICES.md"
+  ]
+}
