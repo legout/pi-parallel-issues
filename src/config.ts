@@ -2,14 +2,53 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
+export const REASONING_EFFORTS = [
+  "off",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+] as const;
+
+export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+export type ParallelIssuesRole = "planner" | "worktreeManager" | "implementer" | "reviewer" | "integrator";
+
+export const ROLE_REASONING_DEFAULTS: Record<ParallelIssuesRole, ReasoningEffort> = {
+  planner: "high",
+  worktreeManager: "low",
+  implementer: "high",
+  reviewer: "medium",
+  integrator: "high",
+};
+
+export interface RoleModelConfig {
+  model: string;
+  reasoningEffort: ReasoningEffort;
+}
+
 export interface ParallelIssuesConfig {
-  version: 2;
-  models: {
-    planner: string;
-    worktreeManager: string;
-    implementer: string;
-    reviewer: string;
-    integrator: string;
+  version: 3;
+  models: Record<ParallelIssuesRole, RoleModelConfig>;
+}
+
+const ROLES: ParallelIssuesRole[] = ["planner", "worktreeManager", "implementer", "reviewer", "integrator"];
+
+type LegacyModels = Record<ParallelIssuesRole, string>;
+type LegacyConfig =
+  | { version: 1; models: Omit<LegacyModels, "worktreeManager"> }
+  | { version: 2; models: LegacyModels };
+
+function migrateLegacyConfig(config: LegacyConfig): ParallelIssuesConfig {
+  const models: LegacyModels = config.version === 1
+    ? { ...config.models, worktreeManager: config.models.planner }
+    : config.models;
+  return {
+    version: 3,
+    models: Object.fromEntries(
+      ROLES.map((role) => [role, { model: models[role], reasoningEffort: ROLE_REASONING_DEFAULTS[role] }]),
+    ) as ParallelIssuesConfig["models"],
   };
 }
 
@@ -24,12 +63,13 @@ export function getConfigPath(agentDir = getPiAgentDir()): string {
 export function readConfig(agentDir = getPiAgentDir()): ParallelIssuesConfig | null {
   const path = getConfigPath(agentDir);
   if (!existsSync(path)) return null;
-  const raw = JSON.parse(readFileSync(path, "utf8")) as
-    | ParallelIssuesConfig
-    | { version: 1; models: Omit<ParallelIssuesConfig["models"], "worktreeManager"> };
-  const parsed: ParallelIssuesConfig = raw.version === 1
-    ? { version: 2, models: { ...raw.models, worktreeManager: raw.models.planner } }
-    : raw;
+  let raw: ParallelIssuesConfig | LegacyConfig;
+  try {
+    raw = JSON.parse(readFileSync(path, "utf8")) as ParallelIssuesConfig | LegacyConfig;
+  } catch (error) {
+    throw new Error(`could not read configuration at ${path}`, { cause: error });
+  }
+  const parsed: ParallelIssuesConfig = raw.version === 3 ? raw : migrateLegacyConfig(raw);
   validateConfig(parsed);
   return parsed;
 }
@@ -43,15 +83,18 @@ export function writeConfig(config: ParallelIssuesConfig, agentDir = getPiAgentD
 }
 
 export function validateConfig(config: ParallelIssuesConfig): void {
-  if (config.version !== 2 || !config.models) {
+  if (config.version !== 3 || !config.models) {
     throw new Error("unsupported pi-parallel-issues configuration");
   }
-  for (const role of ["planner", "worktreeManager", "implementer", "reviewer", "integrator"] as const) {
-    if (!config.models[role]?.includes("/")) {
+  for (const role of ROLES) {
+    if (!config.models[role]?.model?.includes("/")) {
       throw new Error(`models.${role} must be a provider/model reference`);
     }
+    if (!REASONING_EFFORTS.includes(config.models[role].reasoningEffort)) {
+      throw new Error(`models.${role}.reasoningEffort must be a supported reasoning effort`);
+    }
   }
-  if (config.models.implementer === config.models.reviewer) {
+  if (config.models.implementer.model === config.models.reviewer.model) {
     throw new Error("implementer and reviewer models must differ");
   }
 }

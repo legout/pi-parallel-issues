@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { selectModel } from "../src/model-selector.ts";
+import { selectModel, selectReasoningEffort } from "../src/model-selector.ts";
 
 test("TUI model selector is bounded, substring-filterable, and selects the filtered model", async () => {
 	const choices = Array.from(
@@ -95,4 +95,24 @@ test("model selector retains the standard dialog for non-TUI clients", async () 
 		"provider/model",
 	);
 	assert.equal(selectedTitle, "Choose a model");
+});
+
+test("reasoning effort selector puts the recommended supported effort first", async () => {
+	let receivedChoices: string[] | undefined;
+	const ctx = {
+		hasUI: true,
+		mode: "rpc",
+		ui: {
+			select: async (_title: string, choices: string[]) => {
+				receivedChoices = choices;
+				return choices[0];
+			},
+		},
+	} as unknown as ExtensionContext;
+
+	assert.equal(
+		await selectReasoningEffort(ctx, "Reasoning effort", "high", ["low", "medium", "high"]),
+		"high",
+	);
+	assert.deepEqual(receivedChoices, ["high", "low", "medium"]);
 });

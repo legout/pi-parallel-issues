@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import type { ParallelIssuesConfig } from "./config.ts";
+import type { ParallelIssuesConfig, ReasoningEffort } from "./config.ts";
 
 export interface RuntimeReadiness {
   ok: boolean;
@@ -9,6 +9,7 @@ export interface RuntimeReadiness {
 export function checkRuntimeReadiness(input: {
   toolNames: string[];
   availableModels: string[];
+  availableReasoningEfforts?: Readonly<Record<string, readonly ReasoningEffort[]>>;
   config: ParallelIssuesConfig | null;
   agentConflicts: string[];
   checkGitHub?: boolean;
@@ -27,13 +28,24 @@ export function checkRuntimeReadiness(input: {
   if (!input.config) {
     lines.push("FAIL models: not configured");
   } else {
-    const missingModels = Object.values(input.config.models).filter(
+    const missingModels = Object.values(input.config.models).map(({ model }) => model).filter(
       (model) => !input.availableModels.includes(model),
     );
     lines.push(
       missingModels.length
         ? `FAIL models unavailable: ${[...new Set(missingModels)].join(", ")}`
         : "OK configured models",
+    );
+    const unavailableEfforts = Object.entries(input.config.models).flatMap(([role, config]) => {
+      const supported = input.availableReasoningEfforts?.[config.model];
+      return supported && !supported.includes(config.reasoningEffort)
+        ? [`${role}=${config.model}:${config.reasoningEffort}`]
+        : [];
+    });
+    lines.push(
+      unavailableEfforts.length
+        ? `FAIL reasoning efforts unavailable: ${unavailableEfforts.join(", ")}`
+        : "OK configured reasoning efforts",
     );
   }
 

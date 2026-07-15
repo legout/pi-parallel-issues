@@ -3,7 +3,16 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { getPiAgentDir, readConfig, writeConfig, type ParallelIssuesConfig } from "../src/config.ts";
+import {
+  getPiAgentDir,
+  readConfig,
+  REASONING_EFFORTS,
+  ROLE_REASONING_DEFAULTS,
+  writeConfig,
+  type ParallelIssuesConfig,
+  type ReasoningEffort,
+  type RoleModelConfig,
+} from "../src/config.ts";
 import { checkRuntimeReadiness } from "../src/doctor.ts";
 import {
   buildIssueDependencyGraph,
@@ -12,7 +21,7 @@ import {
   resolveGitHubRepository,
 } from "../src/issue-graph.ts";
 import { removeManagedAgents, syncStaticAgents, type SyncAgentsResult } from "../src/managed-agents.ts";
-import { selectModel } from "../src/model-selector.ts";
+import { selectModel, selectReasoningEffort } from "../src/model-selector.ts";
 import { cleanupRun, prepareRun, runStatus } from "../src/worktrees.ts";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -27,6 +36,66 @@ function modelRefs(ctx: ExtensionContext): string[] {
   return current ? [current, ...refs.filter((ref) => ref !== current)] : refs;
 }
 
+export function supportedReasoningEfforts(ctx: ExtensionContext, modelRef: string): ReasoningEffort[] {
+  const model = ctx.modelRegistry.getAvailable().find(
+    (candidate) => `${candidate.provider}/${candidate.id}` === modelRef,
+  ) ?? (ctx.model && `${ctx.model.provider}/${ctx.model.id}` === modelRef ? ctx.model : undefined);
+  if (!model?.reasoning) return ["off"];
+  return REASONING_EFFORTS.filter((effort) => {
+    const mapped = model.thinkingLevelMap?.[effort];
+    if (mapped === null) return false;
+    return effort !== "xhigh" && effort !== "max" || mapped !== undefined;
+  });
+}
+
+function reasoningEffortsByModel(ctx: ExtensionContext): Record<string, ReasoningEffort[]> {
+  return Object.fromEntries(
+    ctx.modelRegistry.getAvailable().map((model) => {
+      const ref = `${model.provider}/${model.id}`;
+      return [ref, supportedReasoningEfforts(ctx, ref)];
+    }),
+  );
+}
+
+function nearestSupportedReasoningEffort(
+  recommended: ReasoningEffort,
+  supported: ReasoningEffort[],
+): ReasoningEffort | undefined {
+  const index = REASONING_EFFORTS.indexOf(recommended);
+  for (let candidate = index; candidate < REASONING_EFFORTS.length; candidate++) {
+    const effort = REASONING_EFFORTS[candidate]!;
+    if (supported.includes(effort)) return effort;
+  }
+  for (let candidate = index - 1; candidate >= 0; candidate--) {
+    const effort = REASONING_EFFORTS[candidate]!;
+    if (supported.includes(effort)) return effort;
+  }
+  return undefined;
+}
+
+async function selectRoleModel(
+  ctx: ExtensionContext,
+  title: string,
+  modelChoices: string[],
+  recommendedEffort: ReasoningEffort,
+): Promise<RoleModelConfig | null> {
+  const model = await selectModel(ctx, title, modelChoices);
+  if (!model) return null;
+  const reasoningEfforts = supportedReasoningEfforts(ctx, model);
+  const fallback = nearestSupportedReasoningEffort(recommendedEffort, reasoningEfforts);
+  if (!fallback) {
+    ctx.ui.notify(`Model ${model} does not support any selectable reasoning effort.`, "error");
+    return null;
+  }
+  const reasoningEffort = await selectReasoningEffort(
+    ctx,
+    `${title} reasoning effort (recommended: ${fallback})`,
+    fallback,
+    reasoningEfforts,
+  );
+  return reasoningEffort ? { model, reasoningEffort } : null;
+}
+
 function skillBody(): string {
   const content = readFileSync(join(packageRoot, "skills", "parallel-issues", "SKILL.md"), "utf8");
   return content.replace(/^---\n[\s\S]*?\n---\n*/, "").trim();
@@ -36,9 +105,21 @@ function readiness(pi: ExtensionAPI, ctx: ExtensionContext, config: ParallelIssu
   return checkRuntimeReadiness({
     toolNames: pi.getAllTools().map((tool) => tool.name),
     availableModels: modelRefs(ctx),
+    availableReasoningEfforts: reasoningEffortsByModel(ctx),
     config,
     agentConflicts: syncResult.conflicts,
   });
+}
+
+export function formatRoleRouting(config: ParallelIssuesConfig): string {
+  return [
+    "User-approved role model routing:",
+    `- planner: model=${config.models.planner.model}, thinking=${config.models.planner.reasoningEffort}`,
+    `- worktree manager: model=${config.models.worktreeManager.model}, thinking=${config.models.worktreeManager.reasoningEffort}`,
+    `- implementer: model=${config.models.implementer.model}, thinking=${config.models.implementer.reasoningEffort}`,
+    `- reviewer: model=${config.models.reviewer.model}, thinking=${config.models.reviewer.reasoningEffort}`,
+    `- integrator: model=${config.models.integrator.model}, thinking=${config.models.integrator.reasoningEffort}`,
+  ].join("\n");
 }
 
 export default function parallelIssuesExtension(pi: ExtensionAPI) {
@@ -103,34 +184,46 @@ export default function parallelIssuesExtension(pi: ExtensionAPI) {
   });
 
   pi.registerCommand("parallel-issues-setup", {
-    description: "Choose role models for parallel issue implementation",
+    description: "Choose role models and reasoning effort for parallel issue implementation",
     handler: async (_args, ctx) => {
       const choices = modelRefs(ctx);
       if (!ctx.hasUI || choices.length < 2) {
         ctx.ui.notify("Setup needs interactive UI and at least two available models.", "error");
         return;
       }
-      const planner = await selectModel(ctx, "Semantic planner agent model", choices);
+      const planner = await selectRoleModel(
+        ctx, "Semantic planner agent model", choices, ROLE_REASONING_DEFAULTS.planner,
+      );
       if (!planner) return;
-      const worktreeManager = await selectModel(ctx, "Worktree manager agent model (small/cheap is sufficient)", choices);
+      const worktreeManager = await selectRoleModel(
+        ctx,
+        "Worktree manager agent model (small/cheap is sufficient)",
+        choices,
+        ROLE_REASONING_DEFAULTS.worktreeManager,
+      );
       if (!worktreeManager) return;
-      const implementer = await selectModel(ctx, "Implementer agent model", choices);
+      const implementer = await selectRoleModel(
+        ctx, "Implementer agent model", choices, ROLE_REASONING_DEFAULTS.implementer,
+      );
       if (!implementer) return;
-      const reviewer = await selectModel(
+      const reviewer = await selectRoleModel(
         ctx,
         "Code reviewer agent model (must differ from implementer)",
-        choices.filter((choice) => choice !== implementer),
+        choices.filter((choice) => choice !== implementer.model),
+        ROLE_REASONING_DEFAULTS.reviewer,
       );
       if (!reviewer) return;
-      const integrator = await selectModel(ctx, "Integrator agent model", choices);
+      const integrator = await selectRoleModel(
+        ctx, "Integrator agent model", choices, ROLE_REASONING_DEFAULTS.integrator,
+      );
       if (!integrator) return;
 
       const config: ParallelIssuesConfig = {
-        version: 2,
+        version: 3,
         models: { planner, worktreeManager, implementer, reviewer, integrator },
       };
       const path = writeConfig(config, agentDir);
-      ctx.ui.notify(`Saved role models to ${path}`, "info");
+      ctx.ui.notify(`Saved role models and reasoning effort to ${path}`, "info");
     },
   });
 
@@ -208,14 +301,7 @@ export default function parallelIssuesExtension(pi: ExtensionAPI) {
         );
         return;
       }
-      const routing = [
-        "User-approved role model routing:",
-        `- planner: ${config.models.planner}`,
-        `- worktree manager: ${config.models.worktreeManager}`,
-        `- implementer: ${config.models.implementer}`,
-        `- reviewer: ${config.models.reviewer}`,
-        `- integrator: ${config.models.integrator}`,
-      ].join("\n");
+      const routing = formatRoleRouting(config);
       pi.sendUserMessage(`${skillBody()}\n\n${routing}\n\n${graphContext}\n\nUser issue selection:\n${args.trim()}`);
     },
   });

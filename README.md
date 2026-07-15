@@ -5,7 +5,7 @@ Installable parallel GitHub issue implementation for [Pi](https://github.com/ear
 ## What it installs
 
 - `/implement-parallel <issues>` — complete orchestration command.
-- `/parallel-issues-setup` — choose the model for each role.
+- `/parallel-issues-setup` — choose the model and reasoning effort for each role.
 - `/parallel-issues-doctor` — verify runtime tools, managed agents, and model configuration.
 - `parallel_issue_graph` — build GitHub dependency edges, frontier, waves, and deterministic deferrals without an LLM.
 - `parallel_issue_worktrees` — controlled worktree lifecycle tool.
@@ -101,7 +101,7 @@ Optional external tools are additive and never required for correctness.
 
 The package intentionally does not bundle generic `Explore` or `general-purpose` agents; those are not workflow roles and may already exist in a user's edxeth setup. It also does not add an LLM-based dependency-graph agent, conflict resolver, or separate verifier: graph construction is deterministic, conflicts stop integration, and verification belongs to implementers/integrator. Extra agents there would add calls without creating a deeper interface.
 
-`/parallel-issues-setup` asks for the model of every model-consuming bundled agent. The worktree manager can use a small inexpensive model because it only calls one constrained tool.
+`/parallel-issues-setup` asks for the model and reasoning effort of every model-consuming bundled agent. It recommends high effort for the planner, implementer, and integrator; medium for reviewers; and low for the constrained worktree manager. The setup screen limits choices to reasoning efforts supported by the selected model, and the defaults can be changed for every role. The worktree manager can use a small inexpensive model because it only calls one constrained tool.
 
 ## Workflow
 

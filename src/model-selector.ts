@@ -9,6 +9,7 @@ import {
 	Text,
 	type SelectItem,
 } from "@earendil-works/pi-tui";
+import type { ReasoningEffort } from "./config.ts";
 
 const MAX_VISIBLE_MODELS = 10;
 
@@ -40,15 +41,16 @@ function wrapIndex(index: number, length: number): number {
 }
 
 /**
- * Select a model from a bounded, substring-filterable TUI list.
+ * Select from a bounded, substring-filterable TUI list.
  *
  * The standard dialog remains the fallback for RPC clients, which cannot render
  * custom terminal components.
  */
-export async function selectModel(
+async function selectChoice(
 	ctx: ModelSelectionContext,
 	title: string,
 	choices: string[],
+	filterLabel: string,
 ): Promise<string | null> {
 	if (!ctx.hasUI) return null;
 	if (ctx.mode !== "tui") return (await ctx.ui.select(title, choices)) ?? null;
@@ -95,7 +97,7 @@ export async function selectModel(
 					new Text(theme.fg("accent", theme.bold(title)), 1, 0),
 				);
 				container.addChild(
-					new Text(theme.fg("muted", "Filter models (substring):"), 1, 0),
+					new Text(theme.fg("muted", `Filter ${filterLabel} (substring):`), 1, 0),
 				);
 				container.addChild(filterInput);
 				container.addChild(selectList);
@@ -146,4 +148,24 @@ export async function selectModel(
 			},
 		};
 	});
+}
+
+/** Select a model from a bounded, substring-filterable TUI list. */
+export function selectModel(
+	ctx: ModelSelectionContext,
+	title: string,
+	choices: string[],
+): Promise<string | null> {
+	return selectChoice(ctx, title, choices, "models");
+}
+
+/** Select a reasoning effort, keeping the recommended value first by default. */
+export function selectReasoningEffort(
+	ctx: ModelSelectionContext,
+	title: string,
+	recommended: ReasoningEffort,
+	choices: ReasoningEffort[],
+): Promise<ReasoningEffort | null> {
+	const ordered = [recommended, ...choices.filter((choice) => choice !== recommended)];
+	return selectChoice(ctx, title, ordered, "reasoning efforts") as Promise<ReasoningEffort | null>;
 }
