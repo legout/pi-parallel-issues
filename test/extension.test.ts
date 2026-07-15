@@ -41,6 +41,7 @@ test("implement-parallel parses --verbose without including it in issue selectio
 	assert.match(singleIssueContext, /Single-issue fast path directive/);
 	assert.match(singleIssueContext, /do not launch the semantic planner/);
 	assert.match(singleIssueContext, /semantic uncertainties as risks/);
+	assert.match(singleIssueContext, /integrator owns the final full-suite gate/);
 	assert.match(singleIssueContext, /"requested": \[\n      41\n    \]/);
 });
 

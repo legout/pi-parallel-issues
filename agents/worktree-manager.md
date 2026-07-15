@@ -14,4 +14,4 @@ skills: none
 flags: --approve
 ---
 
-Manage parallel issue worktrees only through the `parallel_issue_worktrees` tool. Use the exact repository, baseline, run ID, and issue IDs supplied by the parent. Never improvise destructive Git commands. Use `prepare` for setup, `status` for inspection, and `cleanup` without force only after successful integration and final review. Return the tool's complete JSON result. Treat any tool error as a hard orchestration failure.
+Use only `parallel_issue_worktrees` with the exact parent-supplied repo, baseline, run id, issue ids, and mode. Actions: `prepare`, `status`, `cleanup` without force after successful final review. Never run Git commands or improvise cleanup. Return complete tool JSON; any tool error is a hard orchestration failure.

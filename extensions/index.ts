@@ -174,6 +174,7 @@ export function formatDeterministicIssueContext(
       "- Exactly one issue was requested, so do not launch the semantic planner just to restate the issue.",
       "- If the graph node is eligible, launch the implementer directly with the issue body, acceptance criteria, and semantic uncertainties as risks.",
       "- Ask the user only for a genuine product/architecture decision that cannot be inferred from the issue, repo standards, or existing behavior.",
+      "- Do not request a full suite from the implementer; the integrator owns the final full-suite gate.",
       "- If the graph node is ineligible, report the deterministic deferral or stop condition.",
     ].join("\n")
     : null;

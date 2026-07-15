@@ -7,28 +7,23 @@ license: MIT
 
 # Parallel Issue Implementation
 
-Read repository instructions, domain context, the approved specification, and governing architectural decisions before editing.
+Read repo instructions, issue spec, and governing decisions before editing.
 
 ## Implementation worker
 
-- Implement exactly the assigned issue in the current worktree and branch.
-- Before editing, do a short issue-specific invariant scan: identify existing public seams, cross-object/cross-record invariants, adjacent endpoints that share helpers, and which of those are in scope for the issue. For validation, publication, authorization, storage, or indexing issues, explicitly decide whether validation must run against an isolated proposal or the prospective complete system state.
-- Use red-green development where the repository exposes a stable public seam: write one failing behavior test, add the minimum implementation, and repeat vertically.
-- Test through public interfaces rather than private implementation details.
-- Do not add speculative behavior or abstractions outside the issue.
-- Do not run broad autoformatters or reformat unrelated code unless repository documentation explicitly requires that formatter. Prefer surgical edits plus the repo's lint command. If formatting is required, limit it to files intentionally changed for the issue and verify the resulting diff is semantic or mandated.
-- Run typechecking and focused tests regularly, then the full required suite once for the final semantic tree. During review remediation, rerun focused regression tests and changed-file lint/type checks first; rerun the full suite only when the tree changed semantically since the last full-suite pass or when the parent explicitly requests it. Do not rerun a long full suite after a no-op amend of an already verified tree.
-- Do not run independent code review; the parent owns separate Standards and Spec reviews.
-- Commit only intended tracked changes with a concise Conventional Commits subject.
-- Before returning, verify `git status --short` and the committed diff. There must be no tracked unstaged changes; leave unrelated untracked user files untouched and report them explicitly.
-- Return commit SHA, branch, changed files, validation commands/results, and blockers.
-- When resumed with review findings, address every actionable finding that is in the assigned issue scope, validate, and commit remediation. If a finding targets adjacent pre-existing behavior outside the issue, report it as out-of-scope follow-up instead of expanding the implementation without parent confirmation.
+- Implement exactly the assigned issue on the supplied branch/worktree.
+- First scan issue seams/invariants: public entrypoints, shared helpers, cross-record/system invariants, adjacent endpoints, and what is in scope. For validation/publication/auth/storage/indexing, decide whether checks must use isolated input or complete prospective state.
+- Use public-interface, vertical tests where practical; avoid private-test lock-in.
+- No speculative behavior, sibling issues, broad refactors, or broad autoformatting. Format only intended files when repo docs require it.
+- Validate with focused tests plus changed-file lint/type checks. **Do not run the full suite unless the parent explicitly asks or the issue changes global test/runtime infrastructure.** The integrator owns the final full-suite gate.
+- Commit only intended tracked changes. Before returning, confirm `git status --short` has no tracked unstaged changes; leave unrelated untracked files untouched and report them.
+- Return commit SHA, branch, changed files, focused validation commands/results, and blockers.
+- On review resume, fix actionable in-scope findings, run focused regression validation, and commit/amend. Report adjacent out-of-scope findings instead of expanding scope silently.
 
 ## Integrator
 
-- Integrate only approved issue diffs and only in the supplied deterministic order.
-- Use binary-safe Git patches and stop on the first conflict or changed parent state.
-- Never reset, clean, or silently resolve user work.
-- Run the full required verification on the integrated state before committing.
-- Use a concise Conventional Commits subject: `<type>(<scope>): <imperative summary>`.
-- Do not push.
+- Integrate only parent-approved issue diffs in deterministic order.
+- Verify parent branch/baseline/clean state; apply binary-safe patches; stop on conflict.
+- Run cheap/focused integration checks and create the integration candidate commit before final review.
+- After final review is clean, run the full suite once on the final tree and record the tree hash. Reuse a passing full-suite result for the same tree; rerun only after code changes.
+- Never reset, clean, push, or silently resolve user work.

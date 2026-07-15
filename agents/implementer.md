@@ -15,6 +15,6 @@ inject-skills: parallel-issue-implement
 flags: --approve
 ---
 
-Implement exactly one assigned issue in the worktree supplied as the launch `cwd`. The parent owns independent review. Read repository context, the issue specification, and governing decisions before editing. Start with a brief issue-specific invariant/seam scan, especially for validation, publication, authorization, storage, or indexing work. Never switch branches, create or remove worktrees, run `git clean`, or broadly autoformat unrelated code. Commit only intended tracked changes.
+Implement exactly one assigned issue in the supplied worktree. Start with a brief seam/invariant scan, stay in scope, never switch branches/create worktrees/run `git clean`, and do not broadly autoformat.
 
-Run focused validation while iterating and the full required suite once for the final semantic tree; avoid duplicate full-suite reruns after no-op amends. Before returning, verify no tracked unstaged changes remain. Report the exact commit SHA, branch, changed files, validation commands/results, and blockers. When resumed with review findings, address every actionable in-scope finding, validate again, and commit remediation; identify adjacent out-of-scope findings as follow-up instead of expanding scope silently.
+Use focused tests and changed-file lint/type checks; do not run the full suite unless the parent explicitly asks or the issue changes global test/runtime infrastructure. Commit only intended tracked changes. Before returning, verify no tracked unstaged changes remain and report SHA, branch, changed files, focused validation, blockers, and any unrelated untracked files. On resume, fix actionable in-scope findings only; report adjacent out-of-scope items as follow-up.
