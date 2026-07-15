@@ -16,6 +16,8 @@ import {
 import { checkRuntimeReadiness } from "../src/doctor.ts";
 import {
   buildIssueDependencyGraph,
+  type CheckoutSnapshot,
+  type IssueDependencyGraph,
   parseIssueSelection,
   readCheckoutSnapshot,
   resolveGitHubRepository,
@@ -154,6 +156,29 @@ export function formatExecutionRouting(mode: AgentLaunchMode): string {
     `- final reviewers: ${agent("code-reviewer")}`,
     `When preparing worktrees, pass mode=${mode} to parallel_issue_worktrees. Use only the generated implementer and reviewer definitions it returns; they are bound to the same execution mode.`,
   ].join("\n");
+}
+
+export function formatDeterministicIssueContext(
+  checkout: CheckoutSnapshot,
+  graph: IssueDependencyGraph | null,
+): string {
+  if (!graph) {
+    return [
+      `Deterministic checkout snapshot:\n${JSON.stringify(checkout, null, 2)}`,
+      "Issue graph unavailable because the selection is not an exact list of issue numbers or URLs. The planner must resolve the selection.",
+    ].join("\n\n");
+  }
+  const fastPath = graph.requested.length === 1
+    ? [
+      "Single-issue fast path directive:",
+      "- Exactly one issue was requested, so do not launch the semantic planner just to restate the issue.",
+      "- If the graph node is eligible, launch the implementer directly with the issue body, acceptance criteria, and semantic uncertainties as risks.",
+      "- Ask the user only for a genuine product/architecture decision that cannot be inferred from the issue, repo standards, or existing behavior.",
+      "- If the graph node is ineligible, report the deterministic deferral or stop condition.",
+    ].join("\n")
+    : null;
+  const deterministic = `Deterministic checkout snapshot and issue graph (GitHub REST; no LLM used):\n${JSON.stringify({ checkout, graph }, null, 2)}`;
+  return fastPath ? `${fastPath}\n\n${deterministic}` : deterministic;
 }
 
 export default function parallelIssuesExtension(pi: ExtensionAPI) {
@@ -328,9 +353,7 @@ export default function parallelIssuesExtension(pi: ExtensionAPI) {
         const graph = parsed.numbers.length && !parsed.hasUnparsedText
           ? await buildIssueDependencyGraph({ repository: currentRepository, numbers: parsed.numbers })
           : null;
-        graphContext = graph
-          ? `Deterministic checkout snapshot and issue graph (GitHub REST; no LLM used):\n${JSON.stringify({ checkout, graph }, null, 2)}`
-          : `Deterministic checkout snapshot:\n${JSON.stringify(checkout, null, 2)}\n\nIssue graph unavailable because the selection is not an exact list of issue numbers or URLs. The planner must resolve the selection.`;
+        graphContext = formatDeterministicIssueContext(checkout, graph);
       } catch (error) {
         ctx.ui.notify(
           `Could not build deterministic issue context: ${error instanceof Error ? error.message : String(error)}`,

@@ -7,7 +7,7 @@ import { readConfig, type ParallelIssuesConfig } from "../src/config.ts";
 
 test("implement-parallel parses --verbose without including it in issue selection", async () => {
 	process.env.PI_CODING_AGENT_DIR = mkdtempSync(join(tmpdir(), "pi-parallel-extension-"));
-	const { formatExecutionRouting, parseImplementParallelArguments } = await import(
+	const { formatDeterministicIssueContext, formatExecutionRouting, parseImplementParallelArguments } = await import(
 		`../extensions/index.ts?verbose=${Date.now()}`
 	);
 	assert.deepEqual(parseImplementParallelArguments("--verbose 41 https://github.com/acme/repo/issues/42"), {
@@ -22,6 +22,26 @@ test("implement-parallel parses --verbose without including it in issue selectio
 	assert.match(interactive, /planner: issue-planner-verbose/);
 	assert.match(interactive, /mode=interactive/);
 	assert.match(interactive, /foreground pane/);
+	const singleIssueContext = formatDeterministicIssueContext(
+		{ root: "/repo", branch: "main", baseline: "abc123", porcelain: "" },
+		{
+			repository: "acme/repo",
+			requested: [41],
+			nodes: [],
+			externalBlockers: [],
+			edges: [],
+			frontier: [41],
+			waves: [[41]],
+			deferred: [],
+			semanticUncertainties: ["#41 has no machine-detectable acceptance criteria"],
+			requiresSemanticPlanner: true,
+			source: "github-rest",
+		},
+	);
+	assert.match(singleIssueContext, /Single-issue fast path directive/);
+	assert.match(singleIssueContext, /do not launch the semantic planner/);
+	assert.match(singleIssueContext, /semantic uncertainties as risks/);
+	assert.match(singleIssueContext, /"requested": \[\n      41\n    \]/);
 });
 
 test("extension registers commands and deterministic tools while installing managed agents", async () => {
