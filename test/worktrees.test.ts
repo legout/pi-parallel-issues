@@ -82,6 +82,28 @@ test("prepare restores an existing manifest and rolls back only new issues", () 
   cleanupRun({ repo, run: "incremental", paths });
 });
 
+test("interactive preparation binds every generated agent to foreground mode", () => {
+  const { repo, paths, baseline } = fixture();
+  const manifest = prepareRun({
+    repo,
+    baseline,
+    run: "interactive",
+    issues: ["1"],
+    mode: "interactive",
+    paths,
+  });
+  assert.equal(manifest.agentMode, "interactive");
+  const item = manifest.issues["1"]!;
+  for (const agentFile of item.agentFiles) {
+    assert.match(readFileSync(agentFile, "utf8"), /^mode: interactive$/m);
+  }
+  assert.throws(
+    () => prepareRun({ repo, baseline, run: "interactive", issues: ["1"], paths }),
+    /existing run manifest has a different agent mode/,
+  );
+  cleanupRun({ repo, run: "interactive", paths });
+});
+
 test("repository keys sanitize pathological repository names", () => {
   const { repo, paths, baseline } = fixture("repo #1");
   const manifest = prepareRun({ repo, baseline, run: "safe", issues: ["5"], paths });

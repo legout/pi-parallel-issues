@@ -7,6 +7,7 @@ import {
   bindAgentToCwd,
   MANAGED_MARKER,
   removeManagedAgents,
+  verboseAgentName,
   syncStaticAgents,
 } from "../src/managed-agents.ts";
 
@@ -31,11 +32,21 @@ test("cwd binding matches edxeth's raw frontmatter parser", () => {
   assert.equal(bound.startsWith("---\n"), true);
 });
 
+test("interactive cwd bindings retain the generated name and foreground mode", () => {
+  const template = readFileSync(join(bundledAgents, "implementer.md"), "utf8");
+  const bound = bindAgentToCwd(template, "parallel-test-implementer", "/tmp/worktree", "interactive");
+  assert.match(bound, /^name: parallel-test-implementer$/m);
+  assert.match(bound, /^mode: interactive$/m);
+});
+
 test("sync installs and updates only managed agent definitions", () => {
   const target = mkdtempSync(join(tmpdir(), "pi-parallel-agents-"));
   const first = syncStaticAgents(bundledAgents, target);
-  assert.equal(first.installed.length, 5);
+  assert.equal(first.installed.length, 10);
   assert.equal(first.conflicts.length, 0);
+  const verbosePlanner = join(target, `${verboseAgentName("issue-planner")}.md`);
+  assert.match(readFileSync(verbosePlanner, "utf8"), /^name: issue-planner-verbose$/m);
+  assert.match(readFileSync(verbosePlanner, "utf8"), /^mode: interactive$/m);
 
   const planner = join(target, "issue-planner.md");
   writeFileSync(planner, `${MANAGED_MARKER}\nstale\n`);
@@ -55,6 +66,6 @@ test("sync preserves unmanaged collisions and uninstall removes only managed fil
   assert.equal(readFileSync(collision, "utf8"), "user owned\n");
 
   const removed = removeManagedAgents(target);
-  assert.equal(removed.length, 4);
+  assert.equal(removed.length, 9);
   assert.equal(readFileSync(collision, "utf8"), "user owned\n");
 });

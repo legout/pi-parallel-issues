@@ -11,6 +11,8 @@ Run the complete protocol. The parent is an orchestrator; implementation, review
 
 The `/implement-parallel` command injects five user-approved role model references and reasoning efforts plus a deterministic checkout snapshot and, for exact issue selections, a GitHub dependency graph. Use each role's exact `model` and `thinking` values in every `subagent` launch. The implementer and reviewer models must remain different. Do not invent or upgrade models or reasoning efforts.
 
+The command also injects an **execution routing** block. It names the exact static agent definitions for this run and specifies either `background` (default) or `interactive` (`/implement-parallel --verbose`) mode. Treat that block as authoritative: use its named planner, worktree-manager, integrator, and final-reviewer agents, pass its mode to `parallel_issue_worktrees` during `prepare`, and use only the generated implementer/reviewer definitions returned by that tool. In interactive mode, every role must run in a foreground pane; never substitute the default background role definitions.
+
 ## Invariants
 
 - Start from a clean parent checkout and one recorded baseline SHA.

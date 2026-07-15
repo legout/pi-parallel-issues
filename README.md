@@ -4,7 +4,7 @@ Installable parallel GitHub issue implementation for [Pi](https://github.com/ear
 
 ## What it installs
 
-- `/implement-parallel <issues>` — complete orchestration command.
+- `/implement-parallel [--verbose] <issues>` — complete orchestration command.
 - `/parallel-issues-setup` — choose the model and reasoning effort for each role.
 - `/parallel-issues-doctor` — verify runtime tools, managed agents, and model configuration.
 - `parallel_issue_graph` — build GitHub dependency edges, frontier, waves, and deterministic deferrals without an LLM.
@@ -48,6 +48,18 @@ Then run:
 ```text
 /implement-parallel 41 42 45
 ```
+
+Add `--verbose` to run every workflow role in a foreground interactive pane
+instead of the default background process mode:
+
+```text
+/implement-parallel --verbose 41 42 45
+```
+
+Foreground mode requires a supported `pi-subagents` interactive mux backend
+(Herdr, cmux, tmux, zellij, or WezTerm). It is useful when you want to watch
+or steer each planner, worker, reviewer, and integrator live; it does not
+change the workflow's synchronous barriers or review requirements.
 
 A normal Pi session can also run the command. Orchestrator mode simply prevents the parent from doing worker tasks itself.
 
@@ -129,7 +141,9 @@ $PI_CODING_AGENT_DIR/agents/p-*.md
 ```
 
 Generated per-issue implementer and reviewer agent identifiers begin with `p-` to keep active-agent
-names compact.
+names compact. Normal runs use background role definitions. `--verbose` selects
+managed `*-verbose` static role definitions and creates per-issue definitions
+with `mode: interactive`, so the whole workflow consistently runs in foreground panes.
 
 Safety properties:
 

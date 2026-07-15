@@ -4,7 +4,12 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getPiAgentDir } from "./config.ts";
-import { bindAgentToCwd, removeManagedAgent, writeManagedAgent } from "./managed-agents.ts";
+import {
+  bindAgentToCwd,
+  removeManagedAgent,
+  writeManagedAgent,
+  type AgentLaunchMode,
+} from "./managed-agents.ts";
 
 const SAFE_TOKEN = /^[A-Za-z0-9._-]+$/;
 const AGENT_TEMPLATES_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "agents");
@@ -18,11 +23,13 @@ export interface IssueManifestEntry {
 }
 
 export interface RunManifest {
-  version: 1;
+  version: 1 | 2;
   repo: string;
   repoKey: string;
   run: string;
   baseline: string;
+  /** Defaults to background for manifests created before interactive support. */
+  agentMode?: AgentLaunchMode;
   issues: Record<string, IssueManifestEntry>;
 }
 
@@ -86,6 +93,7 @@ export function prepareRun(input: {
   baseline: string;
   run: string;
   issues: string[];
+  mode?: AgentLaunchMode;
   paths?: WorktreePaths;
 }): RunManifest {
   const paths = input.paths ?? defaultWorktreePaths();
@@ -95,6 +103,10 @@ export function prepareRun(input: {
     BigInt(a) < BigInt(b) ? -1 : BigInt(a) > BigInt(b) ? 1 : 0,
   );
   if (issues.length === 0) throw new Error("at least one issue is required");
+  const mode = input.mode ?? "background";
+  if (mode !== "background" && mode !== "interactive") {
+    throw new Error(`invalid agent mode: ${JSON.stringify(mode)}`);
+  }
   const baseline = git(root, ["rev-parse", `${input.baseline}^{commit}`]).trim();
   if (git(root, ["status", "--porcelain"])) {
     throw new Error(`parent working tree is not clean: ${root}`);
@@ -105,9 +117,12 @@ export function prepareRun(input: {
   const previousManifest = existsSync(file) ? readFileSync(file, "utf8") : null;
   const manifest: RunManifest = previousManifest
     ? (JSON.parse(previousManifest) as RunManifest)
-    : { version: 1, repo: root, repoKey: key, run, baseline, issues: {} };
+    : { version: 2, repo: root, repoKey: key, run, baseline, agentMode: mode, issues: {} };
   if (manifest.repo !== root || manifest.baseline !== baseline) {
     throw new Error("existing run manifest has a different repository or baseline");
+  }
+  if ((manifest.agentMode ?? "background") !== mode) {
+    throw new Error("existing run manifest has a different agent mode");
   }
 
   const created: Array<{ worktree: string; branch: string; agentFiles: string[] }> = [];
@@ -134,9 +149,9 @@ export function prepareRun(input: {
       ];
       const implementerTemplate = readFileSync(join(AGENT_TEMPLATES_DIR, "implementer.md"), "utf8");
       const reviewerTemplate = readFileSync(join(AGENT_TEMPLATES_DIR, "code-reviewer.md"), "utf8");
-      writeManagedAgent(agentFiles[0]!, bindAgentToCwd(implementerTemplate, implementerAgent, worktree));
+      writeManagedAgent(agentFiles[0]!, bindAgentToCwd(implementerTemplate, implementerAgent, worktree, mode));
       createdItem.agentFiles.push(agentFiles[0]!);
-      writeManagedAgent(agentFiles[1]!, bindAgentToCwd(reviewerTemplate, reviewerAgent, worktree));
+      writeManagedAgent(agentFiles[1]!, bindAgentToCwd(reviewerTemplate, reviewerAgent, worktree, mode));
       createdItem.agentFiles.push(agentFiles[1]!);
       manifest.issues[issue] = { worktree, branch, implementerAgent, reviewerAgent, agentFiles };
       writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`);

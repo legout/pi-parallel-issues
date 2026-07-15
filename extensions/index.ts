@@ -20,7 +20,13 @@ import {
   readCheckoutSnapshot,
   resolveGitHubRepository,
 } from "../src/issue-graph.ts";
-import { removeManagedAgents, syncStaticAgents, type SyncAgentsResult } from "../src/managed-agents.ts";
+import {
+  removeManagedAgents,
+  syncStaticAgents,
+  verboseAgentName,
+  type AgentLaunchMode,
+  type SyncAgentsResult,
+} from "../src/managed-agents.ts";
 import { selectModel, selectReasoningEffort } from "../src/model-selector.ts";
 import { cleanupRun, prepareRun, runStatus } from "../src/worktrees.ts";
 
@@ -122,6 +128,34 @@ export function formatRoleRouting(config: ParallelIssuesConfig): string {
   ].join("\n");
 }
 
+export function parseImplementParallelArguments(args: string): {
+  selection: string;
+  mode: AgentLaunchMode;
+} {
+  const tokens = args.trim().split(/\s+/).filter(Boolean);
+  const verbose = tokens.includes("--verbose");
+  return {
+    selection: tokens.filter((token) => token !== "--verbose").join(" "),
+    mode: verbose ? "interactive" : "background",
+  };
+}
+
+export function formatExecutionRouting(mode: AgentLaunchMode): string {
+  const agent = (name: string) => mode === "interactive" ? verboseAgentName(name) : name;
+  return [
+    `Subagent execution mode: ${mode}.`,
+    mode === "interactive"
+      ? "This invocation requested --verbose. Every subagent must use an interactive foreground pane; do not launch a background agent."
+      : "Use background agents for this invocation.",
+    "Use these exact static agent definitions:",
+    `- planner: ${agent("issue-planner")}`,
+    `- worktree manager: ${agent("worktree-manager")}`,
+    `- integrator: ${agent("integrator")}`,
+    `- final reviewers: ${agent("code-reviewer")}`,
+    `When preparing worktrees, pass mode=${mode} to parallel_issue_worktrees. Use only the generated implementer and reviewer definitions it returns; they are bound to the same execution mode.`,
+  ].join("\n");
+}
+
 export default function parallelIssuesExtension(pi: ExtensionAPI) {
   pi.registerTool({
     name: "parallel_issue_graph",
@@ -153,6 +187,7 @@ export default function parallelIssuesExtension(pi: ExtensionAPI) {
       run: Type.String(),
       baseline: Type.Optional(Type.String()),
       issues: Type.Optional(Type.Array(Type.String())),
+      mode: Type.Optional(Type.Union([Type.Literal("background"), Type.Literal("interactive")])),
       force: Type.Optional(Type.Boolean()),
     }),
     async execute(_toolCallId, params) {
@@ -166,6 +201,7 @@ export default function parallelIssuesExtension(pi: ExtensionAPI) {
           baseline: params.baseline,
           run: params.run,
           issues: params.issues,
+          ...(params.mode === undefined ? {} : { mode: params.mode }),
         });
       } else if (params.action === "status") {
         result = runStatus({ repo: params.repo, run: params.run });
@@ -244,7 +280,7 @@ export default function parallelIssuesExtension(pi: ExtensionAPI) {
   });
 
   pi.registerCommand("implement-parallel", {
-    description: "Implement independent issues concurrently with worktrees and independent review",
+    description: "Implement independent issues concurrently; add --verbose for foreground agent panes",
     handler: async (args, ctx) => {
       let config: ParallelIssuesConfig | null;
       try {
@@ -262,13 +298,14 @@ export default function parallelIssuesExtension(pi: ExtensionAPI) {
         ctx.ui.notify(result.lines.join("\n"), "error");
         return;
       }
-      if (!args.trim()) {
-        ctx.ui.notify("Usage: /implement-parallel <issue numbers, URLs, or selection>", "error");
+      const { selection, mode } = parseImplementParallelArguments(args);
+      if (!selection) {
+        ctx.ui.notify("Usage: /implement-parallel [--verbose] <issue numbers, URLs, or selection>", "error");
         return;
       }
       let graphContext: string;
       try {
-        const parsed = parseIssueSelection(args);
+        const parsed = parseIssueSelection(selection);
         const [currentRepository, checkout] = await Promise.all([
           resolveGitHubRepository(ctx.cwd),
           readCheckoutSnapshot(ctx.cwd),
@@ -302,7 +339,8 @@ export default function parallelIssuesExtension(pi: ExtensionAPI) {
         return;
       }
       const routing = formatRoleRouting(config);
-      pi.sendUserMessage(`${skillBody()}\n\n${routing}\n\n${graphContext}\n\nUser issue selection:\n${args.trim()}`);
+      const execution = formatExecutionRouting(mode);
+      pi.sendUserMessage(`${skillBody()}\n\n${routing}\n\n${execution}\n\n${graphContext}\n\nUser issue selection:\n${selection}`);
     },
   });
 
