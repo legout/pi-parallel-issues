@@ -5,6 +5,12 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { Type } from "typebox";
 import { getPiAgentDir, readConfig, writeConfig, type ParallelIssuesConfig } from "../src/config.ts";
 import { checkRuntimeReadiness } from "../src/doctor.ts";
+import {
+  buildIssueDependencyGraph,
+  parseIssueSelection,
+  readCheckoutSnapshot,
+  resolveGitHubRepository,
+} from "../src/issue-graph.ts";
 import { removeManagedAgents, syncStaticAgents, type SyncAgentsResult } from "../src/managed-agents.ts";
 import { cleanupRun, prepareRun, runStatus } from "../src/worktrees.ts";
 
@@ -40,6 +46,26 @@ function readiness(pi: ExtensionAPI, ctx: ExtensionContext, config: ParallelIssu
 }
 
 export default function parallelIssuesExtension(pi: ExtensionAPI) {
+  pi.registerTool({
+    name: "parallel_issue_graph",
+    label: "Parallel issue dependency graph",
+    description: "Build a deterministic GitHub issue dependency graph without an LLM call.",
+    parameters: Type.Object({
+      repository: Type.String({ description: "GitHub owner/repository" }),
+      issues: Type.Array(Type.Number({ minimum: 1 }), { minItems: 1, maxItems: 50 }),
+    }),
+    async execute(_toolCallId, params) {
+      const graph = await buildIssueDependencyGraph({
+        repository: params.repository,
+        numbers: params.issues,
+      });
+      return {
+        content: [{ type: "text", text: JSON.stringify(graph, null, 2) }],
+        details: graph,
+      };
+    },
+  });
+
   pi.registerTool({
     name: "parallel_issue_worktrees",
     label: "Parallel issue worktrees",
@@ -88,22 +114,24 @@ export default function parallelIssuesExtension(pi: ExtensionAPI) {
         ctx.ui.notify("Setup needs interactive UI and at least two available models.", "error");
         return;
       }
-      const planner = await selectModel(ctx, "Planner model", choices);
+      const planner = await selectModel(ctx, "Semantic planner agent model", choices);
       if (!planner) return;
-      const implementer = await selectModel(ctx, "Implementer model", choices);
+      const worktreeManager = await selectModel(ctx, "Worktree manager agent model (small/cheap is sufficient)", choices);
+      if (!worktreeManager) return;
+      const implementer = await selectModel(ctx, "Implementer agent model", choices);
       if (!implementer) return;
       const reviewer = await selectModel(
         ctx,
-        "Reviewer model (must differ from implementer)",
+        "Code reviewer agent model (must differ from implementer)",
         choices.filter((choice) => choice !== implementer),
       );
       if (!reviewer) return;
-      const integrator = await selectModel(ctx, "Integrator model", choices);
+      const integrator = await selectModel(ctx, "Integrator agent model", choices);
       if (!integrator) return;
 
       const config: ParallelIssuesConfig = {
-        version: 1,
-        models: { planner, implementer, reviewer, integrator },
+        version: 2,
+        models: { planner, worktreeManager, implementer, reviewer, integrator },
       };
       const path = writeConfig(config, agentDir);
       ctx.ui.notify(`Saved role models to ${path}`, "info");
@@ -149,14 +177,50 @@ export default function parallelIssuesExtension(pi: ExtensionAPI) {
         ctx.ui.notify("Usage: /implement-parallel <issue numbers, URLs, or selection>", "error");
         return;
       }
+      let graphContext: string;
+      try {
+        const parsed = parseIssueSelection(args);
+        const [currentRepository, checkout] = await Promise.all([
+          resolveGitHubRepository(ctx.cwd),
+          readCheckoutSnapshot(ctx.cwd),
+        ]);
+        if (checkout.porcelain) {
+          ctx.ui.notify(`Parent checkout is not clean:\n${checkout.porcelain}`, "error");
+          return;
+        }
+        if (!checkout.branch) {
+          ctx.ui.notify("Parent checkout is in detached HEAD state.", "error");
+          return;
+        }
+        if (parsed.repository && parsed.repository.toLowerCase() !== currentRepository.toLowerCase()) {
+          ctx.ui.notify(
+            `Selected issues belong to ${parsed.repository}, but this checkout is ${currentRepository}.`,
+            "error",
+          );
+          return;
+        }
+        const graph = parsed.numbers.length && !parsed.hasUnparsedText
+          ? await buildIssueDependencyGraph({ repository: currentRepository, numbers: parsed.numbers })
+          : null;
+        graphContext = graph
+          ? `Deterministic checkout snapshot and issue graph (GitHub REST; no LLM used):\n${JSON.stringify({ checkout, graph }, null, 2)}`
+          : `Deterministic checkout snapshot:\n${JSON.stringify(checkout, null, 2)}\n\nIssue graph unavailable because the selection is not an exact list of issue numbers or URLs. The planner must resolve the selection.`;
+      } catch (error) {
+        ctx.ui.notify(
+          `Could not build deterministic issue context: ${error instanceof Error ? error.message : String(error)}`,
+          "error",
+        );
+        return;
+      }
       const routing = [
         "User-approved role model routing:",
         `- planner: ${config.models.planner}`,
+        `- worktree manager: ${config.models.worktreeManager}`,
         `- implementer: ${config.models.implementer}`,
         `- reviewer: ${config.models.reviewer}`,
         `- integrator: ${config.models.integrator}`,
       ].join("\n");
-      pi.sendUserMessage(`${skillBody()}\n\n${routing}\n\nUser issue selection:\n${args.trim()}`);
+      pi.sendUserMessage(`${skillBody()}\n\n${routing}\n\n${graphContext}\n\nUser issue selection:\n${args.trim()}`);
     },
   });
 

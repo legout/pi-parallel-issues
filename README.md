@@ -7,10 +7,11 @@ Installable parallel GitHub issue implementation for [Pi](https://github.com/ear
 - `/implement-parallel <issues>` — complete orchestration command.
 - `/parallel-issues-setup` — choose the model for each role.
 - `/parallel-issues-doctor` — verify runtime tools, managed agents, and model configuration.
+- `parallel_issue_graph` — build GitHub dependency edges, frontier, waves, and deterministic deferrals without an LLM.
 - `parallel_issue_worktrees` — controlled worktree lifecycle tool.
 - `parallel-issues` — the orchestration skill, also available as `/skill:parallel-issues`.
 - `parallel-issue-implement` — implementation discipline injected into workers.
-- Four managed static agent definitions plus generated cwd-bound implementer/reviewer agents.
+- Five managed role agents plus generated cwd-bound implementer/reviewer copies for each issue.
 
 ## Requirements
 
@@ -57,9 +58,9 @@ Pi packages natively install extensions, skills, prompts, and themes. They do **
 This package bridges that seam as follows:
 
 1. Pi loads `extensions/index.ts` from the package manifest.
-2. During extension initialization, it synchronizes four marked agent definitions into `$PI_CODING_AGENT_DIR/agents/`.
-3. The worktree tool creates issue worktrees and marked cwd-bound agents for each run.
-4. Cleanup removes generated agents and clean worktrees while retaining issue branches.
+2. During extension initialization, it synchronizes five marked agent definitions into `$PI_CODING_AGENT_DIR/agents/`.
+3. The worktree tool creates issue worktrees and derives cwd-bound implementer/reviewer definitions from the bundled role templates. edxeth v2.5.3 requires `cwd` in agent frontmatter; its launch tool does not accept `cwd` as a parameter.
+4. Cleanup removes clean worktrees and generated agents while retaining issue branches.
 5. `/parallel-issues-uninstall` removes only marked managed agents before package removal.
 
 The synchronizer never overwrites an unmarked user-owned agent with the same filename.
@@ -88,16 +89,33 @@ The same rule applies to tools. Required functionality is either:
 
 Optional external tools are additive and never required for correctness.
 
+## Bundled agents
+
+| Agent | Why it is bundled | Model setup role |
+|---|---|---|
+| `parallel-issues-planner` | Resolves only specification and overlap uncertainty left by the deterministic graph | semantic planner |
+| `parallel-issues-worktree-manager` | Calls the controlled worktree tool when orchestrator mode hides non-subagent tools | worktree manager |
+| `parallel-issues-implementer` | Source template for cwd-bound issue writers; each generated session is resumed for remediation | implementer |
+| `parallel-issues-code-reviewer` | Source template for cwd-bound read-only Standards or Spec reviewers | reviewer |
+| `parallel-issues-integrator` | Applies reviewed diffs, verifies the integrated state, and handles final remediation | integrator |
+
+The package intentionally does not bundle generic `Explore` or `general-purpose` agents; those are not workflow roles and may already exist in a user's edxeth setup. It also does not add an LLM-based dependency-graph agent, conflict resolver, or separate verifier: graph construction is deterministic, conflicts stop integration, and verification belongs to implementers/integrator. Extra agents there would add calls without creating a deeper interface.
+
+`/parallel-issues-setup` asks for the model of every model-consuming bundled agent. The worktree manager can use a small inexpensive model because it only calls one constrained tool.
+
 ## Workflow
 
-1. A read-only planner resolves issues, blockers, dependencies, overlap, and one clean baseline.
-2. A controlled tool creates one persistent worktree and branch per eligible issue.
-3. Generated implementers run concurrently and commit focused results.
-4. Generated reviewers run Standards and Spec axes independently.
-5. Original implementer sessions are resumed to remediate findings, up to three cycles.
-6. One integrator applies reviewed diffs in issue order and runs full verification.
-7. Two final reviewers inspect the integrated committed diff; the integrator is resumed if needed.
-8. Clean worktrees and generated agents are removed; issue branches remain for audit/recovery.
+1. The extension reads the clean checkout baseline and builds the native GitHub dependency graph programmatically.
+2. A semantic planner runs only when acceptance criteria or likely code overlap cannot be decided from structured evidence.
+3. A controlled tool creates one persistent worktree and branch per eligible frontier issue.
+4. Generated cwd-bound implementer agents run concurrently and commit focused results.
+5. Generated cwd-bound reviewers run Standards and Spec axes independently.
+6. Original implementer sessions are resumed to remediate findings, up to three cycles.
+7. One integrator applies reviewed diffs in issue order and runs full verification.
+8. Two final reviewers inspect the integrated committed diff; the integrator is resumed if needed.
+9. Clean worktrees and generated agents are removed; issue branches remain for audit/recovery.
+
+See [`docs/dependency-graph.md`](docs/dependency-graph.md) for the deterministic/semantic split and the conditions that trigger a planner call.
 
 ## State and safety
 

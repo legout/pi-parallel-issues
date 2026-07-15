@@ -2,15 +2,12 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { getPiAgentDir } from "./config.ts";
-import {
-  implementerAgentText,
-  removeManagedAgent,
-  reviewerAgentText,
-  writeManagedAgent,
-} from "./managed-agents.ts";
+import { bindAgentToCwd, removeManagedAgent, writeManagedAgent } from "./managed-agents.ts";
 
 const SAFE_TOKEN = /^[A-Za-z0-9._-]+$/;
+const AGENT_TEMPLATES_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "agents");
 
 export interface IssueManifestEntry {
   worktree: string;
@@ -135,9 +132,11 @@ export function prepareRun(input: {
         join(paths.agentDir, "agents", `${implementerAgent}.md`),
         join(paths.agentDir, "agents", `${reviewerAgent}.md`),
       ];
-      writeManagedAgent(agentFiles[0]!, implementerAgentText(implementerAgent, worktree));
+      const implementerTemplate = readFileSync(join(AGENT_TEMPLATES_DIR, "parallel-issues-implementer.md"), "utf8");
+      const reviewerTemplate = readFileSync(join(AGENT_TEMPLATES_DIR, "parallel-issues-code-reviewer.md"), "utf8");
+      writeManagedAgent(agentFiles[0]!, bindAgentToCwd(implementerTemplate, implementerAgent, worktree));
       createdItem.agentFiles.push(agentFiles[0]!);
-      writeManagedAgent(agentFiles[1]!, reviewerAgentText(reviewerAgent, worktree));
+      writeManagedAgent(agentFiles[1]!, bindAgentToCwd(reviewerTemplate, reviewerAgent, worktree));
       createdItem.agentFiles.push(agentFiles[1]!);
       manifest.issues[issue] = { worktree, branch, implementerAgent, reviewerAgent, agentFiles };
       writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`);

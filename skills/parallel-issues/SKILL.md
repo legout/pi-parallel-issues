@@ -9,7 +9,7 @@ license: MIT
 
 Run the complete protocol. The parent is an orchestrator; implementation, review, worktree management, and integration belong to named subagents.
 
-The `/implement-parallel` command injects four user-approved role model references. Use those exact model values in `subagent` launches. The implementer and reviewer models must remain different. Do not invent or upgrade models.
+The `/implement-parallel` command injects five user-approved role model references plus a deterministic checkout snapshot and, for exact issue selections, a GitHub dependency graph. Use those exact model values in `subagent` launches. The implementer and reviewer models must remain different. Do not invent or upgrade models.
 
 ## Invariants
 
@@ -22,25 +22,31 @@ The `/implement-parallel` command injects four user-approved role model referenc
 - Integrate deterministically by issue number. Stop on conflicts; never improvise a merge or reset user work.
 - Cap review/fix cycles at three per issue and three after integration.
 
-## 1. Resolve scope
+## 1. Resolve scope with the deterministic graph first
 
-Launch one synchronous `parallel-issues-planner` subagent with the configured planner model. Give it the user's exact issue selection. Require repository root, current branch, baseline SHA, exact porcelain status, complete eligible issue briefs, deferred issues and reasons, dependencies, and overlap risks.
+Never ask an LLM to reconstruct dependency facts already present in the injected graph. GitHub state, labels, assignees, native `blocked_by` edges, frontier, topological waves, and deterministic deferrals are authoritative programmatic evidence.
 
-Stop if the parent is dirty, the baseline is ambiguous, no issue is eligible, or eligible issues depend on one another. Report deferrals rather than silently dropping them. Choose a collision-resistant safe run ID such as `20260715-issue-41-42`.
+- If a graph is present and `requiresSemanticPlanner` is `false`, do **not** launch the planner. Use `frontier` as the eligible set, graph nodes as issue briefs, and graph deferrals verbatim.
+- If a graph is present and `requiresSemanticPlanner` is `true`, launch one synchronous `parallel-issues-planner` with the configured planner model. Give it the graph and ask it to resolve **only** `semanticUncertainties`: specification sufficiency and likely code/file overlap. It must not refetch or reinterpret deterministic dependency facts.
+- If no graph is present because the selection was free-form, launch the planner to resolve the selection and semantic readiness. It may use `parallel_issue_graph` after resolving exact issue numbers.
+
+When a planner is needed, require complete eligible issue briefs, acceptance criteria, semantic overlap risks, and any additional deferrals. Preserve deterministic deferrals even if the planner disagrees.
+
+Stop if the injected checkout is dirty, the baseline is ambiguous, no issue is eligible, or eligible issues depend on one another. Only the current graph frontier may enter one concurrent wave; later waves are deferred. Report deferrals rather than silently dropping them. Choose a collision-resistant safe run ID such as `20260715-issue-41-42`.
 
 ## 2. Create persistent worktrees
 
-Launch `parallel-issues-worktree-manager` with the configured planner model. Ask it to call `parallel_issue_worktrees` with action `prepare`, the repository, baseline, run ID, and eligible issue numbers. The result contains each worktree, branch, generated implementer agent, and generated reviewer agent. Stop on setup error. Do not edit the parent checkout while issue pipelines run.
+If `parallel_issue_worktrees` is active in the parent, call it directly. In delegation-only orchestrator mode the tool is hidden, so launch `parallel-issues-worktree-manager` with the configured worktree-manager model and ask it to call the tool with action `prepare`, the repository, baseline, run ID, and eligible issue numbers. The result contains each worktree, branch, and generated cwd-bound implementer/reviewer agent name. Stop on setup error. Do not edit the parent checkout while issue pipelines run.
 
 ## 3. Implement concurrently
 
-Make one `subagent` call with `children`, exactly one child per eligible issue in issue-number order. Use each generated implementer agent and the configured implementer model. Give every child a self-contained issue brief, acceptance criteria, relevant documentation paths, shared baseline, branch, and worktree. State that the parent owns independent review. Require focused validation and a committed result.
+Make one `subagent` call with `children`, exactly one child per eligible issue in issue-number order. Use that issue's generated implementer agent and the configured implementer model. Give every child a self-contained issue brief, acceptance criteria, relevant documentation paths, shared baseline, and branch. State that the parent owns independent review. Require focused validation and a committed result.
 
 Record each child session file because remediation must use `subagent_resume`. A candidate succeeds only when its commit descends from the baseline, has a non-empty diff, leaves a clean worktree, and validation passed. Ask the worktree manager for `status` and verify those facts. Defer failed candidates with exact reasons.
 
 ## 4. Review every candidate concurrently
 
-For every successful candidate, launch two read-only children in one `subagent children` batch using its generated reviewer agent and the configured reviewer model:
+For every successful candidate, launch two read-only children in one `subagent children` batch using that issue's generated reviewer agent and the configured reviewer model:
 
 - **Standards:** exact `<baseline>...<issue-head>` diff, repository standards, and this smell baseline: Mysterious Name, Duplicated Code, Feature Envy, Data Clumps, Primitive Obsession, Repeated Switches, Shotgun Surgery, Divergent Change, Speculative Generality, Message Chains, Middle Man, Refused Bequest. Repository standards override smell heuristics; skip tooling-enforced issues.
 - **Spec:** the same exact diff plus the issue's complete specification and acceptance criteria. Check missing or partial requirements, scope creep, and incorrect behavior.
@@ -65,7 +71,7 @@ If either axis has actionable findings, resume the original integrator with both
 
 ## 8. Cleanup and report
 
-Only after clean final review, ask the worktree manager to call `parallel_issue_worktrees` with action `cleanup`, without force. Cleanup removes clean worktrees and generated agent definitions but retains issue branches for recovery. If cleanup fails, report retained paths and do not destroy dirty worktrees.
+Only after clean final review, call `parallel_issue_worktrees` directly when available; otherwise ask the worktree manager to call it with action `cleanup`, without force. Cleanup removes clean worktrees but retains issue branches for recovery. If cleanup fails, report retained paths and do not destroy dirty worktrees.
 
 End with:
 

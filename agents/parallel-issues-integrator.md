@@ -1,6 +1,6 @@
-<!-- managed-by: pi-parallel-issues -->
 ---
 name: parallel-issues-integrator
+managed-by: pi-parallel-issues
 description: Integrate reviewed issue branches deterministically, run full verification, commit, and remediate final findings.
 mode: background
 async: false

@@ -3,9 +3,10 @@ import test from "node:test";
 import { checkRuntimeReadiness } from "../src/doctor.ts";
 
 const config = {
-  version: 1 as const,
+  version: 2 as const,
   models: {
     planner: "provider/planner",
+    worktreeManager: "provider/utility",
     implementer: "provider/implementer",
     reviewer: "provider/reviewer",
     integrator: "provider/integrator",

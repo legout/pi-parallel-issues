@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-test("extension registers commands and worktree tool while installing managed agents", async () => {
+test("extension registers commands and deterministic tools while installing managed agents", async () => {
   const agentDir = mkdtempSync(join(tmpdir(), "pi-parallel-extension-"));
   process.env.PI_CODING_AGENT_DIR = agentDir;
   const { default: extension } = await import(`../extensions/index.ts?test=${Date.now()}`);
@@ -21,7 +21,7 @@ test("extension registers commands and worktree tool while installing managed ag
   };
   extension(pi as never);
 
-  assert.deepEqual(tools, ["parallel_issue_worktrees"]);
+  assert.deepEqual(tools, ["parallel_issue_graph", "parallel_issue_worktrees"]);
   assert.deepEqual(commands.sort(), [
     "implement-parallel",
     "parallel-issues-doctor",
@@ -30,4 +30,5 @@ test("extension registers commands and worktree tool while installing managed ag
     "parallel-issues-uninstall",
   ]);
   assert.equal(existsSync(join(agentDir, "agents", "parallel-issues-planner.md")), true);
+  assert.equal(existsSync(join(agentDir, "agents", "parallel-issues-implementer.md")), true);
 });

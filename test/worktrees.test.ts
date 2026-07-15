@@ -43,10 +43,13 @@ test("prepare, status, and cleanup preserve issue branches", () => {
 
   for (const item of Object.values(manifest.issues)) {
     assert.equal(existsSync(item.worktree), true);
+    assert.match(item.implementerAgent, /-implementer$/);
+    assert.match(item.reviewerAgent, /-reviewer$/);
     assert.equal(item.agentFiles.every(existsSync), true);
-    const agentText = readFileSync(item.agentFiles[0]!, "utf8");
-    assert.match(agentText, /managed-by: pi-parallel-issues/);
-    assert.equal(agentText.match(/^cwd:\s*(.+)$/m)?.[1], item.worktree);
+    const generated = readFileSync(item.agentFiles[0]!, "utf8");
+    assert.equal(generated.startsWith("---\n"), true);
+    assert.equal(generated.match(/^cwd:\s*(.+)$/m)?.[1], item.worktree);
+    assert.equal(generated.match(/^name:\s*(.+)$/m)?.[1], item.implementerAgent);
   }
 
   const status = runStatus({ repo, run: "test-12", paths });
@@ -63,14 +66,12 @@ test("prepare, status, and cleanup preserve issue branches", () => {
 
 test("prepare restores an existing manifest and rolls back only new issues", () => {
   const { repo, paths, baseline } = fixture();
-  const existing = prepareRun({ repo, baseline, run: "incremental", issues: ["1"], paths });
-  const collisionName = `parallel-${existing.repoKey}-incremental-issue-3-implementer.md`;
-  const collision = join(paths.agentDir, "agents", collisionName);
-  writeFileSync(collision, "user owned\n");
+  prepareRun({ repo, baseline, run: "incremental", issues: ["1"], paths });
+  git(repo, "branch", "pi/incremental/issue-3", baseline);
 
   assert.throws(
     () => prepareRun({ repo, baseline, run: "incremental", issues: ["2", "3"], paths }),
-    /refusing to overwrite unmanaged agent/,
+    /refusing to overwrite existing worktree or branch/,
   );
   const status = runStatus({ repo, run: "incremental", paths });
   assert.deepEqual(Object.keys(status.issues as object), ["1"]);
@@ -78,48 +79,16 @@ test("prepare restores an existing manifest and rolls back only new issues", () 
     spawnSync("git", ["-C", repo, "show-ref", "--verify", "refs/heads/pi/incremental/issue-2"]).status,
     0,
   );
-  assert.equal(readFileSync(collision, "utf8"), "user owned\n");
   cleanupRun({ repo, run: "incremental", paths });
 });
 
-test("cleanup preserves an unmarked replacement agent", () => {
-  const { repo, paths, baseline } = fixture();
-  const manifest = prepareRun({ repo, baseline, run: "replacement", issues: ["4"], paths });
-  const replacement = manifest.issues["4"]!.agentFiles[0]!;
-  writeFileSync(replacement, "user replacement\n");
-
-  const result = cleanupRun({ repo, run: "replacement", paths });
-  assert.deepEqual(result.retainedAgentFiles, [replacement]);
-  assert.equal(readFileSync(replacement, "utf8"), "user replacement\n");
-});
-
-test("generated identities sanitize repository names and preserve the exact worktree cwd", () => {
+test("repository keys sanitize pathological repository names", () => {
   const { repo, paths, baseline } = fixture("repo #1");
   const manifest = prepareRun({ repo, baseline, run: "safe", issues: ["5"], paths });
   assert.match(manifest.repoKey, /^repo-1-[a-f0-9]{10}$/);
   const item = manifest.issues["5"]!;
-  assert.match(item.implementerAgent, /^[A-Za-z0-9._-]+$/);
-  const text = readFileSync(item.agentFiles[0]!, "utf8");
-  const cwd = text.match(/^cwd:\s*(.+)$/m)?.[1];
-  assert.equal(cwd, item.worktree);
+  assert.match(item.implementerAgent, /^parallel-repo-1-[a-f0-9]{10}-safe-issue-5-implementer$/);
   cleanupRun({ repo, run: "safe", paths });
-});
-
-test("partial cleanup errors report retained replacement agents", () => {
-  const { repo, paths, baseline } = fixture();
-  const manifest = prepareRun({ repo, baseline, run: "partial", issues: ["6", "7"], paths });
-  const replacement = manifest.issues["6"]!.agentFiles[0]!;
-  writeFileSync(replacement, "user replacement\n");
-  writeFileSync(join(manifest.issues["7"]!.worktree, "dirty.txt"), "dirty\n");
-
-  assert.throws(
-    () => cleanupRun({ repo, run: "partial", paths }),
-    (error: unknown) => error instanceof Error && error.message.includes(replacement),
-  );
-  assert.equal(readFileSync(replacement, "utf8"), "user replacement\n");
-
-  git(manifest.issues["7"]!.worktree, "clean", "-f");
-  cleanupRun({ repo, run: "partial", paths });
 });
 
 test("issue IDs are canonical positive decimal numbers", () => {

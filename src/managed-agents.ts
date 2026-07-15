@@ -1,11 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 
-export const MANAGED_MARKER = "<!-- managed-by: pi-parallel-issues -->";
+export const MANAGED_MARKER = "managed-by: pi-parallel-issues";
 
 const STATIC_AGENT_FILES = [
   "parallel-issues-planner.md",
   "parallel-issues-worktree-manager.md",
+  "parallel-issues-implementer.md",
   "parallel-issues-code-reviewer.md",
   "parallel-issues-integrator.md",
 ] as const;
@@ -46,14 +47,27 @@ export function syncStaticAgents(sourceDir: string, targetDir: string): SyncAgen
 }
 
 export function writeManagedAgent(path: string, content: string): void {
-  if (!content.includes(MANAGED_MARKER)) {
-    throw new Error(`refusing to write unmarked managed agent: ${path}`);
+  if (!content.startsWith("---\n") || !content.includes(MANAGED_MARKER)) {
+    throw new Error(`refusing to write invalid managed agent: ${path}`);
   }
   mkdirSync(join(path, ".."), { recursive: true });
   if (existsSync(path) && !readFileSync(path, "utf8").includes(MANAGED_MARKER)) {
     throw new Error(`refusing to overwrite unmanaged agent: ${path}`);
   }
   writeFileSync(path, content);
+}
+
+export function bindAgentToCwd(template: string, name: string, cwd: string): string {
+  if (!/^[A-Za-z0-9._-]+$/.test(name)) throw new Error(`invalid generated agent name: ${name}`);
+  if (/[\r\n]/.test(cwd)) throw new Error(`agent cwd cannot contain line breaks: ${JSON.stringify(cwd)}`);
+  if (!template.startsWith("---\n") || !template.includes(MANAGED_MARKER)) {
+    throw new Error("agent template must start with managed frontmatter");
+  }
+  const named = template.replace(/^name:\s*.+$/m, `name: ${name}`);
+  // edxeth/pi-subagents v2.5.3 reads frontmatter values with a line regex,
+  // not a YAML decoder. Keep the absolute path unquoted: quotes become literal
+  // path characters, while `#` remains part of the regex-captured value.
+  return named.replace(/^(name:\s*.+)$/m, `$1\ncwd: ${cwd}`);
 }
 
 export function removeManagedAgent(path: string): boolean {
@@ -73,19 +87,4 @@ export function removeManagedAgents(targetDir: string): string[] {
     removed.push(basename(path));
   }
   return removed;
-}
-
-function frontmatterPath(path: string): string {
-  if (/[\r\n]/.test(path)) {
-    throw new Error(`agent cwd cannot contain line breaks: ${JSON.stringify(path)}`);
-  }
-  return path;
-}
-
-export function implementerAgentText(name: string, cwd: string): string {
-  return `${MANAGED_MARKER}\n---\nname: ${name}\ndescription: Implement one issue in its persistent worktree.\ncwd: ${frontmatterPath(cwd)}\nmode: background\nasync: false\nauto-exit: true\nsession-mode: lineage-only\nsystem-prompt: append\nallow-model-override: true\nextensions: all\ntools: read,bash,grep,find,ls,edit,write,lsp_diagnostics,lens_diagnostics,lsp_navigation,ast_grep_search,ffgrep,fffind\nskills: parallel-issue-implement\ninject-skills: parallel-issue-implement\nflags: --approve\n---\n\nImplement exactly one assigned issue in this pre-created worktree. The parent owns independent review. Never switch branches, create or remove worktrees, or run git clean. Commit only intended tracked changes. When resumed with findings, remediate every actionable item, validate, and commit again.\n`;
-}
-
-export function reviewerAgentText(name: string, cwd: string): string {
-  return `${MANAGED_MARKER}\n---\nname: ${name}\ndescription: Review one issue axis in its persistent worktree.\ncwd: ${frontmatterPath(cwd)}\nmode: background\nasync: false\nauto-exit: true\nsession-mode: lineage-only\nsystem-prompt: replace\nallow-model-override: true\nextensions: none\ntools: read,bash,grep,find,ls\nskills: none\nflags: --approve\n---\n\nReview only the assigned Standards or Spec axis against the supplied baseline. This is strictly read-only. Ground every finding in the committed diff, a cited repository standard, or a quoted specification requirement. End with VERDICT=clean or VERDICT=findings and a numbered actionable list.\n`;
 }

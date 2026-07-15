@@ -3,9 +3,10 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 export interface ParallelIssuesConfig {
-  version: 1;
+  version: 2;
   models: {
     planner: string;
+    worktreeManager: string;
     implementer: string;
     reviewer: string;
     integrator: string;
@@ -23,7 +24,12 @@ export function getConfigPath(agentDir = getPiAgentDir()): string {
 export function readConfig(agentDir = getPiAgentDir()): ParallelIssuesConfig | null {
   const path = getConfigPath(agentDir);
   if (!existsSync(path)) return null;
-  const parsed = JSON.parse(readFileSync(path, "utf8")) as ParallelIssuesConfig;
+  const raw = JSON.parse(readFileSync(path, "utf8")) as
+    | ParallelIssuesConfig
+    | { version: 1; models: Omit<ParallelIssuesConfig["models"], "worktreeManager"> };
+  const parsed: ParallelIssuesConfig = raw.version === 1
+    ? { version: 2, models: { ...raw.models, worktreeManager: raw.models.planner } }
+    : raw;
   validateConfig(parsed);
   return parsed;
 }
@@ -37,10 +43,10 @@ export function writeConfig(config: ParallelIssuesConfig, agentDir = getPiAgentD
 }
 
 export function validateConfig(config: ParallelIssuesConfig): void {
-  if (config.version !== 1 || !config.models) {
+  if (config.version !== 2 || !config.models) {
     throw new Error("unsupported pi-parallel-issues configuration");
   }
-  for (const role of ["planner", "implementer", "reviewer", "integrator"] as const) {
+  for (const role of ["planner", "worktreeManager", "implementer", "reviewer", "integrator"] as const) {
     if (!config.models[role]?.includes("/")) {
       throw new Error(`models.${role} must be a provider/model reference`);
     }
