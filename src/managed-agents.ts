@@ -4,11 +4,11 @@ import { basename, join } from "node:path";
 export const MANAGED_MARKER = "managed-by: pi-parallel-issues";
 
 const STATIC_AGENT_FILES = [
-  "parallel-issues-planner.md",
-  "parallel-issues-worktree-manager.md",
-  "parallel-issues-implementer.md",
-  "parallel-issues-code-reviewer.md",
-  "parallel-issues-integrator.md",
+  "issue-planner.md",
+  "worktree-manager.md",
+  "implementer.md",
+  "code-reviewer.md",
+  "integrator.md",
 ] as const;
 
 export interface SyncAgentsResult {

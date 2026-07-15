@@ -41,11 +41,11 @@ test("extension registers commands and deterministic tools while installing mana
 		"parallel-issues-uninstall",
 	]);
 	assert.equal(
-		existsSync(join(agentDir, "agents", "parallel-issues-planner.md")),
+		existsSync(join(agentDir, "agents", "issue-planner.md")),
 		true,
 	);
 	assert.equal(
-		existsSync(join(agentDir, "agents", "parallel-issues-implementer.md")),
+		existsSync(join(agentDir, "agents", "implementer.md")),
 		true,
 	);
 

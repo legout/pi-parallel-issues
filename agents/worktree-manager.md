@@ -1,5 +1,5 @@
 ---
-name: parallel-issues-worktree-manager
+name: worktree-manager
 managed-by: pi-parallel-issues
 description: Create, inspect, and retire persistent issue worktrees and generated cwd-bound agent definitions.
 mode: background

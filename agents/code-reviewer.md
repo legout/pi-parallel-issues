@@ -1,5 +1,5 @@
 ---
-name: parallel-issues-code-reviewer
+name: code-reviewer
 managed-by: pi-parallel-issues
 description: Perform one thorough read-only Standards or Spec review against a fixed baseline.
 mode: background

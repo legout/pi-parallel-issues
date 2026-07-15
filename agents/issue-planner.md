@@ -1,5 +1,5 @@
 ---
-name: parallel-issues-planner
+name: issue-planner
 managed-by: pi-parallel-issues
 description: Resolve requested issues, dependencies, readiness, and complete implementation specifications without editing code.
 mode: background

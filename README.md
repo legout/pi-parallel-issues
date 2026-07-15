@@ -93,11 +93,11 @@ Optional external tools are additive and never required for correctness.
 
 | Agent | Why it is bundled | Model setup role |
 |---|---|---|
-| `parallel-issues-planner` | Resolves only specification and overlap uncertainty left by the deterministic graph | semantic planner |
-| `parallel-issues-worktree-manager` | Calls the controlled worktree tool when orchestrator mode hides non-subagent tools | worktree manager |
-| `parallel-issues-implementer` | Source template for cwd-bound issue writers; each generated session is resumed for remediation | implementer |
-| `parallel-issues-code-reviewer` | Source template for cwd-bound read-only Standards or Spec reviewers | reviewer |
-| `parallel-issues-integrator` | Applies reviewed diffs, verifies the integrated state, and handles final remediation | integrator |
+| `issue-planner` | Resolves only specification and overlap uncertainty left by the deterministic graph | semantic planner |
+| `worktree-manager` | Calls the controlled worktree tool when orchestrator mode hides non-subagent tools | worktree manager |
+| `implementer` | Source template for cwd-bound issue writers; each generated session is resumed for remediation | implementer |
+| `code-reviewer` | Source template for cwd-bound read-only Standards or Spec reviewers | reviewer |
+| `integrator` | Applies reviewed diffs, verifies the integrated state, and handles final remediation | integrator |
 
 The package intentionally does not bundle generic `Explore` or `general-purpose` agents; those are not workflow roles and may already exist in a user's edxeth setup. It also does not add an LLM-based dependency-graph agent, conflict resolver, or separate verifier: graph construction is deterministic, conflicts stop integration, and verification belongs to implementers/integrator. Extra agents there would add calls without creating a deeper interface.
 

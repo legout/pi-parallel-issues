@@ -23,7 +23,7 @@ test("every bundled agent starts with parseable frontmatter", () => {
 });
 
 test("cwd binding matches edxeth's raw frontmatter parser", () => {
-  const template = readFileSync(join(bundledAgents, "parallel-issues-implementer.md"), "utf8");
+  const template = readFileSync(join(bundledAgents, "implementer.md"), "utf8");
   const cwd = "/tmp/worktrees/path # literal";
   const bound = bindAgentToCwd(template, "parallel-test-implementer", cwd);
   const parsedCwd = bound.match(/^cwd:\s*(.+)$/m)?.[1]?.trim();
@@ -37,17 +37,17 @@ test("sync installs and updates only managed agent definitions", () => {
   assert.equal(first.installed.length, 5);
   assert.equal(first.conflicts.length, 0);
 
-  const planner = join(target, "parallel-issues-planner.md");
+  const planner = join(target, "issue-planner.md");
   writeFileSync(planner, `${MANAGED_MARKER}\nstale\n`);
   const second = syncStaticAgents(bundledAgents, target);
   assert.deepEqual(second.updated, [planner]);
-  assert.match(readFileSync(planner, "utf8"), /name: parallel-issues-planner/);
+  assert.match(readFileSync(planner, "utf8"), /name: issue-planner/);
   assert.equal(readFileSync(planner, "utf8").startsWith("---\n"), true);
 });
 
 test("sync preserves unmanaged collisions and uninstall removes only managed files", () => {
   const target = mkdtempSync(join(tmpdir(), "pi-parallel-agents-"));
-  const collision = join(target, "parallel-issues-planner.md");
+  const collision = join(target, "issue-planner.md");
   writeFileSync(collision, "user owned\n");
 
   const result = syncStaticAgents(bundledAgents, target);

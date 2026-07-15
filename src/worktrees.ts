@@ -132,8 +132,8 @@ export function prepareRun(input: {
         join(paths.agentDir, "agents", `${implementerAgent}.md`),
         join(paths.agentDir, "agents", `${reviewerAgent}.md`),
       ];
-      const implementerTemplate = readFileSync(join(AGENT_TEMPLATES_DIR, "parallel-issues-implementer.md"), "utf8");
-      const reviewerTemplate = readFileSync(join(AGENT_TEMPLATES_DIR, "parallel-issues-code-reviewer.md"), "utf8");
+      const implementerTemplate = readFileSync(join(AGENT_TEMPLATES_DIR, "implementer.md"), "utf8");
+      const reviewerTemplate = readFileSync(join(AGENT_TEMPLATES_DIR, "code-reviewer.md"), "utf8");
       writeManagedAgent(agentFiles[0]!, bindAgentToCwd(implementerTemplate, implementerAgent, worktree));
       createdItem.agentFiles.push(agentFiles[0]!);
       writeManagedAgent(agentFiles[1]!, bindAgentToCwd(reviewerTemplate, reviewerAgent, worktree));

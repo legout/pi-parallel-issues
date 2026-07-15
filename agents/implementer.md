@@ -1,5 +1,5 @@
 ---
-name: parallel-issues-implementer
+name: implementer
 managed-by: pi-parallel-issues
 description: Implement one assigned issue in its supplied persistent worktree and remediate review findings when resumed.
 mode: background
