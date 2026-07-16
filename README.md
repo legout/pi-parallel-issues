@@ -98,6 +98,8 @@ Terminal safety stops include:
 
 The full suite normally runs once, after clean review. If it fails and code changes, the changed tree must be reviewed before the suite can run again.
 
+Reviewers may run focused or static checks needed to validate a finding, but never the repository full suite. The controller owns that final gate.
+
 ## Persistent state
 
 Default locations:
@@ -111,6 +113,8 @@ $PI_CODING_AGENT_DIR/agents/p-*.md
 ```
 
 A run’s issue set and template hash are immutable. Package changes require a new run; old runs never acquire newly generated agents. Successful cleanup keeps the compact manifest and audit branches while removing worktrees and generated agent files.
+
+Use `parallel_issue_run action=inspect` for read-only diagnostics when an older manifest cannot be resumed. Inspection reports its version, checkout match, branches, worktrees, generated agents, and safe recovery guidance without modifying the run. Legacy generated agents do not indicate that the current workflow ran.
 
 ## Safety
 

@@ -30,6 +30,7 @@ import {
 import { selectModel, selectReasoningEffort } from "../src/model-selector.ts";
 import {
 	cleanupRun,
+	inspectRun,
 	nextRun,
 	openRun,
 	statusRun,
@@ -245,6 +246,7 @@ export default function parallelIssuesExtension(pi: ExtensionAPI) {
 		parameters: Type.Object({
 			action: Type.Union([
 				Type.Literal("open"),
+				Type.Literal("inspect"),
 				Type.Literal("next"),
 				Type.Literal("submit"),
 				Type.Literal("status"),
@@ -289,6 +291,8 @@ export default function parallelIssuesExtension(pi: ExtensionAPI) {
 					models: config.models,
 					...(params.mode ? { mode: params.mode } : {}),
 				});
+			} else if (params.action === "inspect") {
+				result = inspectRun({ repo: params.repo, run: params.run });
 			} else if (params.action === "next") {
 				result = nextRun({ repo: params.repo, run: params.run });
 			} else if (params.action === "submit") {

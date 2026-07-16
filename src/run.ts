@@ -6,6 +6,7 @@ import {
 	mkdirSync,
 	openSync,
 	readFileSync,
+	readdirSync,
 	renameSync,
 	rmSync,
 	statSync,
@@ -113,6 +114,7 @@ export interface RunManifest {
 		tree?: string;
 	};
 	reviewAttempts: number;
+	landedIssues?: number[];
 	findings?: string[];
 	suite?: SuiteEvidence;
 	blocker?: string;
@@ -136,11 +138,33 @@ export interface RunSnapshot {
 	revision: number;
 	state: RunState;
 	baseline: string;
+	landedIssues: number[];
+	reviewAttempts: number;
+	branches: {
+		parent: string;
+		integration: string;
+		issues: Record<string, string>;
+	};
 	integrationTree?: string;
 	jobs: RunJob[];
 	blocker?: string;
 	deferred: Array<{ number: number; reasons: string[] }>;
 	suite?: SuiteEvidence;
+}
+
+export interface RunInspection {
+	run: string;
+	manifestPath: string;
+	manifestVersion: unknown;
+	compatible: boolean;
+	repoMatches: boolean;
+	manifestRepo?: string;
+	baseline?: string;
+	state?: string;
+	branches: string[];
+	worktrees: string[];
+	agents: string[];
+	guidance: string[];
 }
 
 export type RunReceipt = ImplementationReceipt | ReviewReceipt | RepairReceipt;
@@ -219,6 +243,32 @@ function resolveRepo(repoArg: string): { root: string; key: string } {
 
 function manifestPath(paths: RunPaths, repoKey: string, run: string): string {
 	return join(paths.runsDir, repoKey, run, "manifest.json");
+}
+
+function inspectionManifestPath(
+	paths: RunPaths,
+	repoKey: string,
+	run: string,
+): string {
+	const direct = manifestPath(paths, repoKey, run);
+	if (existsSync(direct)) return direct;
+	const matches: string[] = [];
+	if (existsSync(paths.runsDir)) {
+		for (const entry of readdirSync(paths.runsDir, { withFileTypes: true })) {
+			if (!entry.isDirectory()) continue;
+			const candidate = manifestPath(paths, entry.name, run);
+			if (existsSync(candidate)) matches.push(candidate);
+		}
+	}
+	if (!matches.length) throw new Error(`run manifest not found: ${direct}`);
+	if (matches.length > 1) {
+		throw new Error(
+			`run id is ambiguous across stored checkouts: ${matches.join(", ")}`,
+		);
+	}
+	const match = matches[0];
+	if (!match) throw new Error(`run manifest not found: ${direct}`);
+	return match;
 }
 
 function saveManifest(paths: RunPaths, manifest: RunManifest): void {
@@ -353,9 +403,105 @@ function loadManifest(paths: RunPaths, repo: string, run: string): RunManifest {
 		throw new Error(`run manifest is not valid JSON: ${file}`);
 	}
 	if (manifest.version !== 4 || manifest.repo !== root) {
-		throw new Error(`unsupported or mismatched run manifest: ${file}`);
+		throw new Error(
+			`unsupported or mismatched run manifest: ${file}; use action=inspect for read-only diagnostics and recovery guidance`,
+		);
 	}
 	return manifest;
+}
+
+function uniqueStrings(values: unknown[]): string[] {
+	return [
+		...new Set(values.filter((value): value is string => typeof value === "string")),
+	];
+}
+
+function objectRecords(value: unknown): Record<string, unknown>[] {
+	if (!value || typeof value !== "object") return [];
+	return Object.values(value).filter(
+		(item): item is Record<string, unknown> =>
+			Boolean(item) && typeof item === "object",
+	);
+}
+
+function optionalRecord(value: unknown): Record<string, unknown> | undefined {
+	return value && typeof value === "object"
+		? (value as Record<string, unknown>)
+		: undefined;
+}
+
+function inspectionGuidance(
+	compatible: boolean,
+	repoMatches: boolean,
+): string[] {
+	if (compatible) {
+		return [
+			"This manifest is compatible with the current controller; use action=status to view resumable state.",
+		];
+	}
+	const mismatch = repoMatches
+		? ""
+		: " because it belongs to a different checkout";
+	return [
+		`This immutable manifest cannot be resumed by the current version 4 controller${mismatch}.`,
+		"Do not treat legacy generated agents as evidence that the current workflow ran.",
+		"Inspect the reported branches and worktrees before choosing manual recovery or cleanup; nothing was modified by this inspection.",
+		"Start a new run to use the current deterministic workflow.",
+	];
+}
+
+export function inspectRun(input: {
+	repo: string;
+	run: string;
+	paths?: RunPaths;
+}): RunInspection {
+	const paths = input.paths ?? defaultRunPaths();
+	const { root, key } = resolveRepo(input.repo);
+	const run = validateToken(input.run, "run id");
+	const file = inspectionManifestPath(paths, key, run);
+	let raw: Record<string, unknown>;
+	try {
+		raw = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+	} catch {
+		throw new Error(`run manifest is not valid JSON: ${file}`);
+	}
+	const manifestRepo = typeof raw.repo === "string" ? raw.repo : undefined;
+	const repoMatches = manifestRepo === root;
+	const compatible = raw.version === 4 && repoMatches;
+	const issues = objectRecords(raw.issues);
+	const integration = optionalRecord(raw.integration);
+	const branches = uniqueStrings([
+		...issues.map((issue) => issue.branch),
+		integration?.branch,
+	]);
+	const worktrees = uniqueStrings([
+		...issues.map((issue) => issue.worktree),
+		integration?.worktree,
+	]);
+	const agents = uniqueStrings([
+		...issues.flatMap((issue) => [
+			issue.writerAgent,
+			issue.implementerAgent,
+			issue.reviewerAgent,
+		]),
+		integration?.repairAgent,
+		integration?.reviewerAgent,
+	]);
+	const guidance = inspectionGuidance(compatible, repoMatches);
+	return {
+		run,
+		manifestPath: file,
+		manifestVersion: raw.version,
+		compatible,
+		repoMatches,
+		...(manifestRepo ? { manifestRepo } : {}),
+		...(typeof raw.baseline === "string" ? { baseline: raw.baseline } : {}),
+		...(typeof raw.state === "string" ? { state: raw.state } : {}),
+		branches,
+		worktrees,
+		agents,
+		guidance,
+	};
 }
 
 function treeAt(worktree: string, revision = "HEAD"): string {
@@ -497,6 +643,7 @@ function reviewJob(manifest: RunManifest): RunJob {
 			`Review the exact diff ${manifest.baseline}...${manifest.integration.head}.`,
 			`Required tree: ${manifest.integration.tree}`,
 			"Perform Standards, Spec-per-issue, and Interactions passes in one review.",
+			"Run focused or static checks only when needed to validate a finding; never run the repository full suite. The controller owns that gate.",
 			"",
 			specs,
 			"",
@@ -535,6 +682,17 @@ function snapshot(manifest: RunManifest, jobs: RunJob[] = []): RunSnapshot {
 		revision: manifest.revision,
 		state: manifest.state,
 		baseline: manifest.baseline,
+		landedIssues: manifest.landedIssues ?? [],
+		reviewAttempts: manifest.reviewAttempts,
+		branches: {
+			parent: manifest.parentBranch,
+			integration: manifest.integration.branch,
+			issues: Object.fromEntries(
+				Object.values(manifest.issues)
+					.sort((a, b) => a.number - b.number)
+					.map((issue) => [String(issue.number), issue.branch]),
+			),
+		},
 		...(manifest.integration.tree
 			? { integrationTree: manifest.integration.tree }
 			: {}),
@@ -932,6 +1090,9 @@ function land(manifest: RunManifest): void {
 	if (!manifest.integration.head)
 		throw new Error("cannot land an assembly without a head");
 	git(manifest.repo, ["merge", "--ff-only", manifest.integration.head]);
+	manifest.landedIssues = Object.values(manifest.issues)
+		.map((issue) => issue.number)
+		.sort((a, b) => a - b);
 	manifest.state = "LANDED";
 }
 

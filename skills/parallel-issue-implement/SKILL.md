@@ -11,7 +11,7 @@ Read repository instructions, the supplied issue or findings, and only the named
 
 ## Before editing
 
-Create a concise requirement-to-seam-to-focused-test matrix inside the current call. Identify public entrypoints, shared invariants, adjacent endpoints, authorization/storage/indexing implications, and explicit non-goals. If a product decision cannot be inferred safely, return `outcome=needs_decision` instead of inventing intent.
+Create a concise requirement-to-seam-to-focused-test matrix inside the current call. Identify every public entrypoint that touches the resource, shared invariants, adjacent endpoints, lifecycle and expiry triggers, authorization/storage/indexing implications, concurrency and atomicity, bounds before persistence, filesystem/environment isolation for order-independent tests, and explicit non-goals. Mark irrelevant dimensions explicitly rather than silently skipping them. If a product decision cannot be inferred safely, return `outcome=needs_decision` instead of inventing intent.
 
 ## Implementation job
 

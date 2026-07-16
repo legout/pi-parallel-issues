@@ -22,7 +22,7 @@ The run controller owns state, Git operations, evidence validity, and scheduling
 
 ## Driver loop
 
-1. Call `parallel_issue_run` with `action=open`, the deterministic local checkout root, GitHub `owner/repository`, exact issue IDs, a collision-resistant run ID, execution mode, and the repository's documented full-suite command.
+1. Call `parallel_issue_run` with `action=open`, the deterministic local checkout root, GitHub `owner/repository`, exact issue IDs, a collision-resistant run ID, execution mode, and the repository's documented full-suite command. If an existing run is rejected as unsupported or mismatched, call `action=inspect` for read-only diagnostics; never improvise a current workflow from legacy generated agents.
 2. The result contains zero or more jobs. Launch every job in the same `parallelGroup` together in one `subagent children` call, using each returned generated agent and its exact `model`/`thinking` fields. The controller also embeds that routing in generated agent frontmatter.
 3. Every job requests JSON-only output. Parse it and call `parallel_issue_run action=submit` with the exact `jobId` and receipt.
 4. After submitting the group's receipts, call `parallel_issue_run action=next`.

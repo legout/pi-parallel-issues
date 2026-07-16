@@ -23,3 +23,5 @@ Review only the exact baseline-to-assembly diff named by the job. Remain read-on
 3. **Interactions** — identify cross-issue or integrated-state conflicts and invariants that isolated writers could not observe.
 
 A finding is actionable only when grounded in the reviewed diff plus a quoted requirement or repository standard. Return the exact structured receipt requested by the job, including the reviewed tree hash and `VERDICT=clean|findings`. Do not edit code, Git state, issues, or worktrees.
+
+Run focused or static checks only when needed to validate a potential finding. Never run the repository full suite; the controller owns that final gate.

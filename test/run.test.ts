@@ -13,6 +13,7 @@ import { join } from "node:path";
 import test from "node:test";
 import {
 	cleanupRun,
+	inspectRun,
 	nextRun,
 	openRun,
 	statusRun,
@@ -106,6 +107,11 @@ test("uniform one-issue run implements, assembles, reviews, verifies, lands, and
 	);
 	assert.match(generatedWriter, /^model: provider\/writer$/m);
 	assert.match(generatedWriter, /^thinking: high$/m);
+	assert.match(generatedWriter, /bounds before persistence/);
+	assert.deepEqual(snapshot.landedIssues, []);
+	assert.equal(snapshot.reviewAttempts, 0);
+	assert.equal(snapshot.branches.parent, "main");
+	assert.equal(snapshot.branches.issues["1"], `pi/single/issue-1`);
 	assert.throws(
 		() => cleanupRun({ repo, run: "single", paths }),
 		/refusing to clean active run/,
@@ -137,6 +143,12 @@ test("uniform one-issue run implements, assembles, reviews, verifies, lands, and
 	assert.equal(snapshot.state, "REVIEW_PENDING");
 	assert.equal(snapshot.jobs[0]?.kind, "review");
 	assert.equal(snapshot.jobs[0]?.model, models.reviewer.model);
+	assert.match(snapshot.jobs[0]?.task ?? "", /never run the repository full suite/);
+	const generatedReviewer = readFileSync(
+		join(paths.agentDir, "agents", `${snapshot.jobs[0]?.agent}.md`),
+		"utf8",
+	);
+	assert.match(generatedReviewer, /Never run the repository full suite/);
 	const review = snapshot.jobs[0]!;
 	assert.throws(
 		() =>
@@ -191,6 +203,8 @@ test("uniform one-issue run implements, assembles, reviews, verifies, lands, and
 	assert.equal(snapshot.suite?.passed, true);
 	snapshot = nextRun({ repo, run: "single", paths });
 	assert.equal(snapshot.state, "LANDED");
+	assert.deepEqual(snapshot.landedIssues, [1]);
+	assert.equal(snapshot.reviewAttempts, 1);
 	assert.equal(existsSync(join(repo, "feature-1.txt")), true);
 	snapshot = nextRun({ repo, run: "single", paths });
 	assert.equal(snapshot.state, "CLEANED");
@@ -357,10 +371,9 @@ test("suite failure returns to the same assembly writer and requires review afte
 	assert.match(retained.blocker ?? "", /ignored artifacts retained/);
 	assert.equal(existsSync(ignoredArtifact), true);
 	rmSync(ignoredArtifact);
-	assert.equal(
-		cleanupRun({ repo, run: "suite-failure", paths }).state,
-		"CLEANED",
-	);
+	const cleaned = cleanupRun({ repo, run: "suite-failure", paths });
+	assert.equal(cleaned.state, "CLEANED");
+	assert.deepEqual(cleaned.landedIssues, []);
 });
 
 test("controller rejects issues from a different GitHub repository", async () => {
@@ -408,4 +421,64 @@ test("implementation ambiguity blocks rather than invoking a planner", async () 
 	assert.equal(blocked.state, "BLOCKED");
 	assert.match(blocked.blocker ?? "", /retention policy/);
 	assert.equal(statusRun({ repo, run: "blocked", paths }).state, "BLOCKED");
+});
+
+test("legacy manifests can be inspected without being resumed or modified", async () => {
+	const { repo, paths } = fixture();
+	const opened = await openRun({
+		repo,
+		repository: "acme/repo",
+		issues: [38],
+		run: "legacy",
+		fullSuiteCommand: "true",
+		graph: graph([38]),
+		models,
+		paths,
+	});
+	const repoKey = readdirSync(paths.runsDir)[0]!;
+	const file = join(paths.runsDir, repoKey, "legacy", "manifest.json");
+	const legacy = {
+		version: 1,
+		repo,
+		repoKey,
+		run: "legacy",
+		baseline: opened.baseline,
+		issues: {
+			"38": {
+				branch: "pi/legacy/issue-38",
+				worktree: opened.jobs[0]!.cwd,
+				implementerAgent: "legacy-issue-38-implementer",
+				reviewerAgent: "legacy-issue-38-reviewer",
+			},
+		},
+	};
+	writeFileSync(file, `${JSON.stringify(legacy, null, 2)}\n`);
+	const before = readFileSync(file, "utf8");
+
+	const inspection = inspectRun({ repo, run: "legacy", paths });
+	assert.equal(inspection.manifestVersion, 1);
+	assert.equal(inspection.compatible, false);
+	assert.equal(inspection.repoMatches, true);
+	assert.deepEqual(inspection.branches, ["pi/legacy/issue-38"]);
+	assert.deepEqual(inspection.worktrees, [opened.jobs[0]!.cwd]);
+	assert.deepEqual(inspection.agents, [
+		"legacy-issue-38-implementer",
+		"legacy-issue-38-reviewer",
+	]);
+	assert.match(inspection.guidance.join(" "), /cannot be resumed/);
+	assert.match(inspection.guidance.join(" "), /current workflow/);
+	assert.equal(readFileSync(file, "utf8"), before);
+	const otherCheckout = fixture().repo;
+	const movedInspection = inspectRun({
+		repo: otherCheckout,
+		run: "legacy",
+		paths,
+	});
+	assert.equal(movedInspection.repoMatches, false);
+	assert.equal(movedInspection.manifestRepo, repo);
+	assert.equal(movedInspection.manifestPath, file);
+	assert.throws(
+		() => statusRun({ repo, run: "legacy", paths }),
+		/action=inspect for read-only diagnostics/,
+	);
 });
