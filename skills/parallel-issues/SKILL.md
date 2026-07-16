@@ -1,63 +1,49 @@
 ---
 name: parallel-issues
-description: Implement independent GitHub issues concurrently with persistent worktrees, independent Standards and Spec reviews, deterministic integration, and final review. Use when asked to implement multiple ready issues in parallel.
+description: Implement an exact GitHub issue frontier with isolated writers, deterministic assembly, one combined independent review, and one final suite gate.
 disable-model-invocation: true
 license: MIT
 ---
 
 # Parallel Issues
 
-You orchestrate; subagents do the work. Use injected `model`/`thinking`, execution mode, and generated worktree-bound implementer/reviewer agents exactly.
+The run controller owns state, Git operations, evidence validity, and scheduling. Models only write or review code. Follow the controller; do not recreate its state machine in prose.
 
-## Rules
+## Invariants
 
-- Clean parent checkout, one baseline SHA, one issue branch/worktree, one writer per worktree.
-- Eligible issues are ready, unblocked, independent, and in the current graph frontier.
-- Implementers run focused validation only; **the integrator owns the full-suite final gate**.
-- Full suite runs the absolute minimum: normally once after final integrated review is clean. Reuse a pass by `git rev-parse HEAD^{tree}`; never rerun for unchanged/no-op-amended trees.
-- Reviewers are read-only and use reviewer model. Max 3 review/fix cycles per issue and after integration.
-- Stop on dirty parent state, conflicts, setup errors, or unresolved decisions; never reset/clean/improvise over user work.
+- Start from a clean attached parent checkout and immutable baseline.
+- Use exact issue IDs. GitHub dependency facts and frontier selection are deterministic.
+- One cwd-bound writer per issue worktree; one writer at a time in the assembly worktree.
+- Assembly is deterministic and stops on conflicts. No model resolves Git conflicts.
+- One independent reviewer covers Standards, Spec per issue, and Interactions on the exact assembled tree.
+- Writers run focused checks only. The controller runs the full suite after clean review.
+- Review and suite evidence is valid only for its exact tree.
+- Never reset, force-clean, push, overwrite changed parent state, or improvise around controller failures.
 
-## 1. Resolve scope
+## Driver loop
 
-Use deterministic graph facts first: GitHub state, labels, assignees, dependency edges, frontier/waves, deferrals.
+1. Call `parallel_issue_run` with `action=open`, the deterministic local checkout root, GitHub `owner/repository`, exact issue IDs, a collision-resistant run ID, execution mode, and the repository's documented full-suite command.
+2. The result contains zero or more jobs. Launch every job in the same `parallelGroup` together in one `subagent children` call, using each returned generated agent and its exact `model`/`thinking` fields. The controller also embeds that routing in generated agent frontmatter.
+3. Every job requests JSON-only output. Parse it and call `parallel_issue_run action=submit` with the exact `jobId` and receipt.
+4. After submitting the group's receipts, call `parallel_issue_run action=next`.
+5. Repeat steps 2–4 until the controller returns a terminal state.
 
-- Exact single issue + graph: fast path. No planner, no contract-confirmation question unless a real product/architecture choice is unknowable. If eligible, brief implementer from graph body/criteria and pass semantic uncertainties as risks; otherwise report deferral.
-- Graph without semantic uncertainty: use `frontier`; no planner.
-- Graph with semantic uncertainty: planner resolves only spec sufficiency and likely code/file overlap.
-- Free-form selection: planner resolves exact issues, then uses `parallel_issue_graph` when available.
+Do not launch a planner, worktree manager, integrator, separate Standards/Spec reviewers, or per-issue reviewers. Do not ask writers to run the full suite.
 
-Only this frontier enters the wave; defer later waves. Choose a safe run id.
+## Terminal handling
 
-## 2. Prepare and implement
+Success is `CLEANED`. Stop and report exact controller evidence for:
 
-Prepare worktrees via `parallel_issue_worktrees prepare` directly or through worktree-manager. Pass repo, baseline, run id, issue ids, and mode.
+- `BLOCKED` — issue needs a decision or implementation failed;
+- `INTEGRATION_CONFLICT` — deterministic assembly failed;
+- `REVIEW_EXHAUSTED` — bounded review/repair cycles did not converge;
+- `PARENT_CHANGED` — parent checkout changed before landing.
 
-Launch implementers together, issue-number order. Each brief includes issue criteria, relevant docs, baseline, branch/worktree, scope limits, and focused validation expectations. Require commit SHA, changed files, focused commands/results, blockers, and clean tracked worktree. Do not request a full suite unless the issue changes global test/runtime infrastructure.
+`SUITE_FAILED` is recoverable: the controller returns a repair job, then requires review of the changed tree before another suite run.
 
-Verify with worktree-manager `status`: head descends from baseline, diff non-empty, tracked tree clean, focused validation passed. Defer failures with reasons.
-
-## 3. Review and remediate candidates
-
-For each candidate, launch Standards and Spec reviewers together against `<baseline>...<issue-head>`.
-
-- Standards: repo standards plus smell heuristics; skip tooling-enforced issues.
-- Spec: issue body/criteria. Adjacent pre-existing behavior blocks only when in issue scope or newly depended on by the diff; otherwise follow-up.
-
-Require `VERDICT=clean|findings`; findings cite diff plus quoted requirement/standard. Resume original implementer for in-scope findings, require focused regression validation and commit/amend, verify status, rerun both axes only for changed issues, repeat up to 3 cycles.
-
-## 4. Integrate, final review, full-suite gate
-
-Integrator verifies parent state, applies approved diffs in issue order with binary-safe patches, stops on conflict, runs cheap/focused integration checks, and creates an integration candidate commit. It does not run the full suite yet.
-
-Run final Standards and Spec reviews against `<baseline>...HEAD`. If findings are actionable, resume integrator for focused fixes and rerun final reviews. Once final review is clean, run the full suite once on the final tree and record tree hash, command, result, and whether reused. If code changes after that pass, repeat focused checks and one full suite on the new final tree.
-
-## 5. Cleanup and report
-
-After clean final review and passing/reused full-suite gate, cleanup worktrees without force; retain dirty/failed paths. Report:
+Report:
 
 ```text
-STATUS, RUN, BASELINE, HEAD, LANDED, DEFERRED,
-PER_ISSUE_REVIEW, FINAL_REVIEW, FULL_SUITE,
-WORKTREES, BRANCHES
+STATUS, RUN, BASELINE, STATE, LANDED_ISSUES, DEFERRED,
+REVIEW_ATTEMPTS, SUITE_TREE, SUITE_RESULT, BRANCHES, BLOCKER
 ```

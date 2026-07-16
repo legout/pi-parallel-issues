@@ -1,29 +1,31 @@
 ---
 name: parallel-issue-implement
-description: Implementation and integration discipline for pi-parallel-issues workers. Loaded only by managed implementer and integrator agents.
+description: Writing discipline for pi-parallel-issues implementation and assembled-candidate repair jobs.
 disable-model-invocation: true
 license: MIT
 ---
 
-# Parallel Issue Implementation
+# Parallel Issue Writer
 
-Read repo instructions, issue spec, and governing decisions before editing.
+Read repository instructions, the supplied issue or findings, and only the named governing decisions before editing. Expand discovery only to resolve a concrete uncertainty.
 
-## Implementation worker
+## Before editing
 
-- Implement exactly the assigned issue on the supplied branch/worktree.
-- First scan issue seams/invariants: public entrypoints, shared helpers, cross-record/system invariants, adjacent endpoints, and what is in scope. For validation/publication/auth/storage/indexing, decide whether checks must use isolated input or complete prospective state.
-- Use public-interface, vertical tests where practical; avoid private-test lock-in.
-- No speculative behavior, sibling issues, broad refactors, or broad autoformatting. Format only intended files when repo docs require it.
-- Validate with focused tests plus changed-file lint/type checks. **Do not run the full suite unless the parent explicitly asks or the issue changes global test/runtime infrastructure.** The integrator owns the final full-suite gate.
-- Commit only intended tracked changes. Before returning, confirm `git status --short` has no tracked unstaged changes; leave unrelated untracked files untouched and report them.
-- Return commit SHA, branch, changed files, focused validation commands/results, and blockers.
-- On review resume, fix actionable in-scope findings, run focused regression validation, and commit/amend. Report adjacent out-of-scope findings instead of expanding scope silently.
+Create a concise requirement-to-seam-to-focused-test matrix inside the current call. Identify public entrypoints, shared invariants, adjacent endpoints, authorization/storage/indexing implications, and explicit non-goals. If a product decision cannot be inferred safely, return `outcome=needs_decision` instead of inventing intent.
 
-## Integrator
+## Implementation job
 
-- Integrate only parent-approved issue diffs in deterministic order.
-- Verify parent branch/baseline/clean state; apply binary-safe patches; stop on conflict.
-- Run cheap/focused integration checks and create the integration candidate commit before final review.
-- After final review is clean, run the full suite once on the final tree and record the tree hash. Reuse a passing full-suite result for the same tree; rerun only after code changes.
-- Never reset, clean, push, or silently resolve user work.
+- Implement exactly the assigned issue in the supplied worktree.
+- Prefer public-interface, vertical behavior tests.
+- Do not implement sibling issues, speculative abstractions, broad refactors, or unrelated formatting.
+- Run focused tests plus changed-file lint/type checks. Never run the full suite; the run controller owns that final gate.
+- Commit intended tracked changes and verify the tracked worktree is clean.
+
+## Repair job
+
+- Change only what is needed for the supplied integrated-review or suite findings.
+- Reproduce each finding where practical, add focused regressions, and preserve unrelated assembled behavior.
+- Commit the repair and leave the tracked worktree clean.
+- Any changed tree must be reviewed again; do not run the full suite yourself.
+
+Return exactly the structured receipt requested by the job. The controller independently verifies commit ancestry, tree state, and cleanliness.

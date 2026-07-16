@@ -1,29 +1,28 @@
 # pi-parallel-issues
 
-Installable parallel GitHub issue implementation for [Pi](https://github.com/earendil-works/pi): persistent issue worktrees, independent Standards and Spec reviews, deterministic integration, and bounded remediation loops.
+Installable parallel GitHub issue implementation for [Pi](https://github.com/earendil-works/pi): isolated writers, deterministic assembly, one independent integrated review, and one final full-suite gate.
 
 ## What it installs
 
-- `/implement-parallel [--verbose] <issues>` — complete orchestration command.
-- `/parallel-issues-setup` — choose the model and reasoning effort for each role.
-- `/parallel-issues-doctor` — verify runtime tools, managed agents, and model configuration.
-- `parallel_issue_graph` — build GitHub dependency edges, frontier, waves, and deterministic deferrals without an LLM.
-- `parallel_issue_worktrees` — controlled worktree lifecycle tool.
-- `parallel-issues` — the orchestration skill, also available as `/skill:parallel-issues`.
-- `parallel-issue-implement` — implementation discipline injected into workers.
-- Five managed role agents plus generated cwd-bound implementer/reviewer copies for each issue.
+- `/implement-parallel [--verbose] <exact issues>` — open and drive one immutable run.
+- `/parallel-issues-setup` — choose the writer and independent reviewer models.
+- `/parallel-issues-doctor` — verify runtime tools, models, and GitHub authentication.
+- `parallel_issue_run` — the deterministic run controller.
+- `parallel-issues` — the compact controller driver skill.
+- `parallel-issue-implement` — implementation/repair discipline injected into writers.
+- Two bundled templates: `writer` and `reviewer`. Run-bound copies are generated with hard cwd bindings.
 
 ## Requirements
 
 - Pi 0.80.7 or newer.
 - Git and Node.js 22 or newer.
-- `gh` authenticated for repositories whose issue tracker is GitHub.
+- `gh` authenticated for GitHub repositories.
 - [`edxeth/pi-subagents`](https://github.com/edxeth/pi-subagents) v2.5.3 or newer.
-- At least two available Pi models so implementation and review use different models.
+- At least two available Pi models so writing and review use different models.
 
-`pi-lens` and `@ff-labs/pi-fff` are optional. Managed writers list their enhanced diagnostics/search tools, but edxeth/pi-subagents safely ignores unavailable optional tool names; built-in read, Bash, edit, and write remain sufficient.
+`pi-lens` and `@ff-labs/pi-fff` are optional enhancements.
 
-## Install from GitHub
+## Install
 
 ```bash
 pi install git:github.com/edxeth/pi-subagents@v2.5.3
@@ -37,99 +36,69 @@ Restart Pi, then configure and verify:
 /parallel-issues-doctor
 ```
 
-For a delegation-only parent:
-
-```bash
-PI_ORCHESTRATOR_MODE=1 pi
-```
-
-Then run:
+Run exact issue IDs or URLs:
 
 ```text
 /implement-parallel 41 42 45
 ```
 
-Add `--verbose` to run every workflow role in a foreground interactive pane
-instead of the default background process mode:
+Use foreground interactive panes when desired:
 
 ```text
 /implement-parallel --verbose 41 42 45
 ```
 
-Foreground mode requires a supported `pi-subagents` interactive mux backend
-(Herdr, cmux, tmux, zellij, or WezTerm). It is useful when you want to watch
-or steer each planner, worker, reviewer, and integrator live; it does not
-change the workflow's synchronous barriers or review requirements.
+Free-form selection is intentionally outside the execution interface. Resolve “next issues?” first, then pass exact IDs.
 
-A normal Pi session can also run the command. Orchestrator mode simply prevents the parent from doing worker tasks itself.
+## Architecture
 
-## Package design
+Models have only two responsibilities:
 
-Pi packages natively install extensions, skills, prompts, and themes. They do **not** currently expose an agent-definition resource type. edxeth/pi-subagents discovers named agents only from `.pi/agents/` and `$PI_CODING_AGENT_DIR/agents/`.
+| Role | Responsibility |
+|---|---|
+| Writer | Implement one issue or repair cited findings in an isolated worktree |
+| Reviewer | Review the exact assembled tree for Standards, Spec per issue, and Interactions |
 
-This package bridges that seam as follows:
+The deterministic controller owns everything else:
 
-1. Pi loads `extensions/index.ts` from the package manifest.
-2. During extension initialization, it synchronizes five marked agent definitions into `$PI_CODING_AGENT_DIR/agents/`.
-3. The worktree tool creates issue worktrees and derives cwd-bound implementer/reviewer definitions from the bundled role templates. edxeth v2.5.3 requires `cwd` in agent frontmatter; its launch tool does not accept `cwd` as a parameter.
-4. Cleanup removes clean worktrees and generated agents while retaining issue branches.
-5. `/parallel-issues-uninstall` removes only marked managed agents before package removal.
+- checkout and baseline validation;
+- GitHub readiness and native dependency facts;
+- frontier selection and later-wave deferral;
+- worktree and generated-agent lifecycle;
+- candidate ancestry, cleanliness, and non-empty-diff verification;
+- binary-safe assembly in issue order;
+- review/suite evidence keyed to exact tree hashes;
+- bounded review/repair cycles;
+- parent-state verification, fast-forward landing, and non-forced cleanup.
 
-The synchronizer never overwrites an unmarked user-owned agent with the same filename.
+There is no planner, model-backed worktree manager, per-issue reviewer, or model-driven integrator.
 
-## External skills and patching policy
+## Uniform workflow
 
-Matt Pocock's skills are **not runtime dependencies**. This package includes namespaced, adapted workflow text derived from the MIT-licensed `implement`, `tdd`, and two-axis `code-review` ideas. See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+One issue is simply a run with `N=1`:
 
-We deliberately do not patch files under `~/.agents/skills`, `~/.pi/agent/skills`, or another package's installation directory:
+```text
+OPEN → IMPLEMENTING → REVIEW_PENDING → REVIEW_CLEAN
+     → SUITE_PASSED → LANDED → CLEANED
+```
 
-- package updates would overwrite such edits;
-- same-name skill discovery is precedence-dependent;
-- local customizations would become indistinguishable from package changes.
+Recoverable review and suite findings route to the assembly-bound writer and invalidate prior evidence:
 
-Instead, the package uses unique skill names:
+```text
+REVIEW_FINDINGS ─→ repair ─→ REVIEW_PENDING
+SUITE_FAILED ─────→ repair ─→ REVIEW_PENDING
+```
 
-- `parallel-issues`
-- `parallel-issue-implement`
+Terminal safety stops include:
 
-The managed agents allowlist and inject those exact names. This is an **overlay**, not an in-place patch.
+- `BLOCKED` — an issue needs a decision or implementation failed;
+- `INTEGRATION_CONFLICT` — deterministic patch assembly failed;
+- `REVIEW_EXHAUSTED` — three review attempts did not converge;
+- `PARENT_CHANGED` — the parent checkout changed before landing.
 
-The same rule applies to tools. Required functionality is either:
+The full suite normally runs once, after clean review. If it fails and code changes, the changed tree must be reviewed before the suite can run again.
 
-- owned by this package (`parallel_issue_worktrees`), or
-- checked as an explicit external capability (`subagent`, `subagent_resume`).
-
-Optional external tools are additive and never required for correctness.
-
-## Bundled agents
-
-| Agent | Why it is bundled | Model setup role |
-|---|---|---|
-| `issue-planner` | Resolves only specification and overlap uncertainty left by the deterministic graph | semantic planner |
-| `worktree-manager` | Calls the controlled worktree tool when orchestrator mode hides non-subagent tools | worktree manager |
-| `implementer` | Source template for cwd-bound issue writers; each generated session is resumed for remediation | implementer |
-| `code-reviewer` | Source template for cwd-bound read-only Standards or Spec reviewers | reviewer |
-| `integrator` | Applies reviewed diffs, verifies the integrated state, and handles final remediation | integrator |
-
-The package intentionally does not bundle generic `Explore` or `general-purpose` agents; those are not workflow roles and may already exist in a user's edxeth setup. It also does not add an LLM-based dependency-graph agent, conflict resolver, or separate verifier: graph construction is deterministic, conflicts stop integration, and verification belongs to implementers/integrator. Extra agents there would add calls without creating a deeper interface.
-
-`/parallel-issues-setup` asks for the model and reasoning effort of every model-consuming bundled agent. It recommends high effort for the planner, implementer, and integrator; medium for reviewers; and low for the constrained worktree manager. The setup screen limits choices to reasoning efforts supported by the selected model, and the defaults can be changed for every role. The worktree manager can use a small inexpensive model because it only calls one constrained tool.
-
-## Workflow
-
-1. The extension reads the clean checkout baseline and builds the native GitHub dependency graph programmatically.
-2. A semantic planner runs only when acceptance criteria or likely code overlap cannot be decided from structured evidence.
-3. A controlled tool creates one persistent worktree and branch per eligible frontier issue.
-4. Generated cwd-bound implementer agents run concurrently and commit focused results.
-5. Generated cwd-bound reviewers run Standards and Spec axes independently.
-6. Original implementer sessions are resumed to remediate findings, up to three cycles.
-7. One integrator applies reviewed diffs in issue order and runs full verification.
-8. Two final reviewers inspect the integrated committed diff; the integrator is resumed if needed.
-9. Clean worktrees and generated agents are removed; issue branches remain for audit/recovery.
-
-See [`docs/dependency-graph.md`](docs/dependency-graph.md) for the deterministic/semantic split and the conditions that trigger a planner call.
-
-## State and safety
+## Persistent state
 
 Default locations:
 
@@ -137,23 +106,52 @@ Default locations:
 $PI_CODING_AGENT_DIR/pi-parallel-issues.json
 ~/.pi/parallel-runs/<repo-key>/<run-id>/manifest.json
 ~/.pi/worktrees/<repo-key>/<run-id>/issue-<N>
+~/.pi/worktrees/<repo-key>/<run-id>/integration
 $PI_CODING_AGENT_DIR/agents/p-*.md
 ```
 
-Generated per-issue implementer and reviewer agent identifiers begin with `p-` to keep active-agent
-names compact. Normal runs use background role definitions. `--verbose` selects
-managed `*-verbose` static role definitions and creates per-issue definitions
-with `mode: interactive`, so the whole workflow consistently runs in foreground panes.
+A run’s issue set and template hash are immutable. Package changes require a new run; old runs never acquire newly generated agents. Successful cleanup keeps the compact manifest and audit branches while removing worktrees and generated agent files.
 
-Safety properties:
+## Safety
 
-- setup refuses a dirty parent checkout;
-- existing branches/worktrees are never overwritten;
-- generated identifiers accept only letters, digits, `.`, `_`, and `-`;
-- partial setup rolls back only artifacts created by that failed call;
-- normal cleanup refuses dirty worktrees;
-- integration stops on changed parent state or patch conflict;
-- forced cleanup is not used by the orchestration skill.
+- setup refuses dirty or detached parent checkouts;
+- branches, worktrees, manifests, and unmanaged agent files are never overwritten;
+- each writable worktree has one cwd-bound writer;
+- candidate receipts are independently checked against Git;
+- conflicts stop assembly; no model improvises resolutions;
+- reviewers are independent and run against one exact assembled tree;
+- full-suite evidence is reusable only for the same tree;
+- landing requires the parent to remain clean, on the same branch and baseline;
+- normal cleanup never forces deletion of dirty worktrees;
+- the package never resets, cleans, pushes, or silently drops selected work.
+
+## Configuration migration
+
+Version 1–3 configurations migrate automatically:
+
+- `implementer` becomes `writer`;
+- `reviewer` remains `reviewer`;
+- planner, worktree-manager, and integrator routing is discarded.
+
+Version 4 configuration is intentionally small:
+
+```json
+{
+  "version": 4,
+  "models": {
+    "writer": { "model": "provider/model", "reasoningEffort": "high" },
+    "reviewer": { "model": "other/model", "reasoningEffort": "medium" }
+  }
+}
+```
+
+An optional `fullSuiteCommand` may provide a repository-independent default. Otherwise `/implement-parallel` infers common Node scripts or asks the orchestrator to use repository instructions.
+
+## Package design
+
+Pi packages do not expose an agent-definition resource type, while edxeth/pi-subagents requires `cwd` in agent frontmatter. `parallel_issue_run open` therefore derives run-bound definitions from bundled templates and writes them under `$PI_CODING_AGENT_DIR/agents/`. Cleanup removes only definitions marked `managed-by: pi-parallel-issues`.
+
+The package does not patch external skills or another package’s installation directory. Its skills and tools are namespaced overlays.
 
 ## Update
 
@@ -162,11 +160,9 @@ pi update git:github.com/legout/pi-parallel-issues
 pi update git:github.com/edxeth/pi-subagents@v2.5.3
 ```
 
-Restart Pi after updates. Managed static agents refresh automatically; unmarked collisions are reported by `/parallel-issues-doctor`.
+Restart Pi after updates. Start a new run to use new controller or prompt behavior.
 
 ## Uninstall
-
-First remove managed agent files:
 
 ```text
 /parallel-issues-uninstall
@@ -178,7 +174,7 @@ Then:
 pi remove git:github.com/legout/pi-parallel-issues
 ```
 
-Remove edxeth/pi-subagents only if no other workflow uses it.
+The uninstall command removes managed generated agents only; manifests, branches, and worktrees are preserved.
 
 ## Development
 
@@ -187,8 +183,6 @@ npm install
 npm run verify
 pi -e .
 ```
-
-`pi -e .` loads the local package for one Pi run without installing it.
 
 ## License
 

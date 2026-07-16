@@ -1,6 +1,6 @@
 {
   "name": "pi-parallel-issues",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Parallel GitHub issue implementation for Pi with persistent worktrees, independent review, and deterministic integration.",
   "type": "module",
   "license": "MIT",
